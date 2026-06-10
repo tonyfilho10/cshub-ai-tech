@@ -60,14 +60,12 @@ export default async function DemandasPage() {
             </h2>
             <div className="space-y-2">
               {items.map((demand) => (
-                <Link
-                  key={demand.id}
-                  href={`/demandas/${demand.id}`}
-                  className="block rounded-lg border border-navy-100 p-3 text-sm transition hover:border-accent-300 hover:shadow"
-                >
-                  <p className="font-medium text-navy-900 line-clamp-2">{demand.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{demand.department.name}</p>
-                  <p className="text-xs text-muted-foreground">por {demand.requester.name}</p>
+                <Link key={demand.id} href={`/demandas/${demand.id}`} className="block">
+                  <Card className="gap-1 p-3 text-sm transition hover:border-accent-300 hover:shadow">
+                    <p className="font-medium text-navy-900 line-clamp-2">{demand.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{demand.department.name}</p>
+                    <p className="text-xs text-muted-foreground">por {demand.requester.name}</p>
+                  </Card>
                 </Link>
               ))}
               {items.length === 0 && (
