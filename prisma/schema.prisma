@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  USER
+  DEV_TEAM
+  ADMIN
+}
+
+enum DemandStatus {
+  SOLICITADO
+  EM_ANALISE
+  APROVADO
+  REJEITADO
+  EM_DESENVOLVIMENTO
+  EM_TESTE
+  EM_PRODUCAO
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  demands   Demand[]
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id           String     @id @default(cuid())
+  authId       String     @unique
+  name         String
+  email        String     @unique
+  role         UserRole   @default(USER)
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  demands      Demand[]
+  createdAt    DateTime   @default(now())
+}
+
+model Demand {
+  id              String       @id @default(cuid())
+  title           String
+  description     String
+  status          DemandStatus @default(SOLICITADO)
+  rejectionReason String?
+  requesterId     String
+  requester       User         @relation(fields: [requesterId], references: [id])
+  departmentId    String
+  department      Department   @relation(fields: [departmentId], references: [id])
+  project         Project?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  demandId      String   @unique
+  demand        Demand   @relation(fields: [demandId], references: [id])
+  technicalSpec String   @db.Text
+  technologies  String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
