@@ -1,12 +1,11 @@
+import { Badge } from "@/components/ui/badge";
 import { STATUS_BADGE_CLASSES, STATUS_LABELS } from "@/lib/constants";
 import type { DemandStatus } from "@prisma/client";
 
 export function StatusBadge({ status }: { status: DemandStatus }) {
   return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
-    >
+    <Badge variant="outline" className={STATUS_BADGE_CLASSES[status]}>
       {STATUS_LABELS[status]}
-    </span>
+    </Badge>
   );
 }

@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
 import { ROLE_LABELS } from "@/lib/constants";
+import { Button } from "@/components/ui/button";
 import type { UserRole } from "@prisma/client";
 
 export function Topbar({
@@ -22,13 +23,10 @@ export function Topbar({
       </div>
 
       <form action={logout}>
-        <button
-          type="submit"
-          className="flex items-center gap-2 rounded-lg border border-navy-200 px-3 py-1.5 text-sm font-medium text-navy-700 transition hover:bg-navy-50"
-        >
+        <Button type="submit" variant="outline">
           <LogOut size={16} />
           Sair
-        </button>
+        </Button>
       </form>
     </header>
   );

@@ -3,6 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { upsertProjectSpec } from "@/lib/actions/demands";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 export function ProjectSpecForm({
   demandId,
@@ -36,51 +41,52 @@ export function ProjectSpecForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl bg-white p-4 shadow-sm">
-      <h3 className="mb-1 text-sm font-semibold text-navy-700">
-        Especificação técnica do projeto
-      </h3>
-      <p className="mb-3 text-xs text-navy-400">
-        Visível apenas para o time de desenvolvimento.
-      </p>
+    <Card className="p-4">
+      <CardContent className="px-0">
+        <form onSubmit={handleSubmit}>
+          <h3 className="mb-1 text-sm font-semibold text-navy-700">
+            Especificação técnica do projeto
+          </h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Visível apenas para o time de desenvolvimento.
+          </p>
 
-      <div className="space-y-3">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-navy-700">
-            Tecnologias
-          </label>
-          <input
-            type="text"
-            value={technologies}
-            onChange={(e) => setTechnologies(e.target.value)}
-            placeholder="Ex: Next.js, Prisma, Supabase, Netlify"
-            className="w-full rounded-lg border border-navy-200 px-3 py-2 text-sm text-navy-900 focus:border-navy-500 focus:outline-none focus:ring-1 focus:ring-navy-500"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-navy-700">
-            Especificação técnica detalhada
-          </label>
-          <textarea
-            value={spec}
-            onChange={(e) => setSpec(e.target.value)}
-            rows={10}
-            placeholder="Arquitetura, modelos de dados, integrações, fluxos, etc."
-            className="w-full rounded-lg border border-navy-200 px-3 py-2 text-sm text-navy-900 focus:border-navy-500 focus:outline-none focus:ring-1 focus:ring-navy-500"
-          />
-        </div>
-      </div>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="technologies">Tecnologias</Label>
+              <Input
+                id="technologies"
+                value={technologies}
+                onChange={(e) => setTechnologies(e.target.value)}
+                placeholder="Ex: Next.js, Prisma, Supabase, Netlify"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="technicalSpec">Especificação técnica detalhada</Label>
+              <Textarea
+                id="technicalSpec"
+                value={spec}
+                onChange={(e) => setSpec(e.target.value)}
+                rows={10}
+                placeholder="Arquitetura, modelos de dados, integrações, fluxos, etc."
+              />
+            </div>
+          </div>
 
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-      {saved && !error && <p className="mt-2 text-sm text-emerald-600">Especificação salva.</p>}
+          {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+          {saved && !error && (
+            <p className="mt-2 text-sm text-emerald-600">Especificação salva.</p>
+          )}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="mt-3 rounded-lg bg-navy-800 px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-700 disabled:opacity-60"
-      >
-        {pending ? "Salvando..." : "Salvar especificação"}
-      </button>
-    </form>
+          <Button
+            type="submit"
+            disabled={pending}
+            className="mt-3 bg-navy-800 text-white hover:bg-navy-700"
+          >
+            {pending ? "Salvando..." : "Salvar especificação"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

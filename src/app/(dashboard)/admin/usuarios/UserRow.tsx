@@ -4,6 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateUserRole, updateUserDepartment } from "@/lib/actions/admin";
 import { ROLE_LABELS } from "@/lib/constants";
+import { TableCell, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Department, User, UserRole } from "@prisma/client";
 
 const ROLES: UserRole[] = ["USER", "DEV_TEAM", "ADMIN"];
@@ -44,40 +52,50 @@ export function UserRow({
   }
 
   return (
-    <tr className="border-b border-navy-100 last:border-0">
-      <td className="px-4 py-3">
+    <TableRow>
+      <TableCell className="px-4 py-3">
         <p className="text-sm font-medium text-navy-900">{user.name}</p>
         <p className="text-xs text-navy-400">{user.email}</p>
         {error && <p className="text-xs text-red-600">{error}</p>}
-      </td>
-      <td className="px-4 py-3">
-        <select
+      </TableCell>
+      <TableCell className="px-4 py-3">
+        <Select
           defaultValue={user.role}
           disabled={pending}
-          onChange={(e) => onRoleChange(e.target.value as UserRole)}
-          className="rounded-lg border border-navy-200 px-2 py-1 text-sm text-navy-900 focus:outline-none focus:ring-1 focus:ring-navy-500"
+          onValueChange={(value) => onRoleChange(value as UserRole)}
         >
-          {ROLES.map((role) => (
-            <option key={role} value={role}>
-              {ROLE_LABELS[role]}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className="px-4 py-3">
-        <select
+          <SelectTrigger size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ROLES.map((role) => (
+              <SelectItem key={role} value={role}>
+                {ROLE_LABELS[role]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell className="px-4 py-3">
+        <Select
           defaultValue={user.departmentId}
           disabled={pending}
-          onChange={(e) => onDepartmentChange(e.target.value)}
-          className="rounded-lg border border-navy-200 px-2 py-1 text-sm text-navy-900 focus:outline-none focus:ring-1 focus:ring-navy-500"
+          onValueChange={(value) => {
+            if (value) onDepartmentChange(value);
+          }}
         >
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-      </td>
-    </tr>
+          <SelectTrigger size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {departments.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </TableCell>
+    </TableRow>
   );
 }

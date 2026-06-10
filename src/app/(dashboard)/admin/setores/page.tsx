@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageAdmin } from "@/lib/permissions";
+import { Card, CardContent } from "@/components/ui/card";
 import { NewDepartmentForm } from "./NewDepartmentForm";
 import { DepartmentRow } from "./DepartmentRow";
 
@@ -19,9 +20,11 @@ export default async function SetoresPage() {
         Gerencie os setores/departamentos disponíveis para os usuários.
       </p>
 
-      <div className="mb-4 rounded-xl bg-white p-4 shadow-sm">
-        <NewDepartmentForm />
-      </div>
+      <Card className="mb-4 p-4">
+        <CardContent className="px-0">
+          <NewDepartmentForm />
+        </CardContent>
+      </Card>
 
       <ul className="space-y-2">
         {departments.map((d) => (

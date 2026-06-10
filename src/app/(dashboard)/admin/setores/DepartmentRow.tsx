@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Check, X } from "lucide-react";
 import { renameDepartment, deleteDepartment } from "@/lib/actions/admin";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { Department } from "@prisma/client";
 
 export function DepartmentRow({ department }: { department: Department }) {
@@ -40,61 +42,67 @@ export function DepartmentRow({ department }: { department: Department }) {
 
   return (
     <li className="flex flex-col gap-1 rounded-lg border border-navy-100 bg-white px-4 py-2.5">
-    <div className="flex items-center justify-between gap-3">
-      {editing ? (
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="flex-1 rounded border border-navy-200 px-2 py-1 text-sm text-navy-900 focus:outline-none focus:ring-1 focus:ring-navy-500"
-        />
-      ) : (
-        <span className="text-sm font-medium text-navy-900">{department.name}</span>
-      )}
-
-      <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-3">
         {editing ? (
-          <>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={save}
-              className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50"
-            >
-              <Check size={16} />
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setName(department.name);
-                setEditing(false);
-              }}
-              className="rounded p-1.5 text-navy-400 hover:bg-navy-50"
-            >
-              <X size={16} />
-            </button>
-          </>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="flex-1"
+          />
         ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="rounded p-1.5 text-navy-400 hover:bg-navy-50"
-            >
-              <Pencil size={16} />
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={remove}
-              className="rounded p-1.5 text-red-500 hover:bg-red-50"
-            >
-              <Trash2 size={16} />
-            </button>
-          </>
+          <span className="text-sm font-medium text-navy-900">{department.name}</span>
         )}
+
+        <div className="flex items-center gap-1">
+          {editing ? (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={pending}
+                onClick={save}
+                className="text-emerald-600 hover:bg-emerald-50"
+              >
+                <Check size={16} />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={pending}
+                onClick={() => {
+                  setName(department.name);
+                  setEditing(false);
+                }}
+              >
+                <X size={16} />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setEditing(true)}
+              >
+                <Pencil size={16} />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={pending}
+                onClick={remove}
+                className="text-red-500 hover:bg-red-50"
+              >
+                <Trash2 size={16} />
+              </Button>
+            </>
+          )}
+        </div>
       </div>
-    </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
     </li>
