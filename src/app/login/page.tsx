@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState } from "react";
 import { login, type AuthFormState } from "@/lib/actions/auth";
 import { AuthCard } from "@/components/AuthCard";
@@ -36,13 +35,6 @@ export default function LoginPage() {
           {pending ? "Entrando..." : "Entrar"}
         </Button>
       </form>
-
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        Ainda não tem conta?{" "}
-        <Link href="/cadastro" className="font-medium text-accent-600 hover:underline">
-          Cadastre-se
-        </Link>
-      </p>
     </AuthCard>
   );
 }

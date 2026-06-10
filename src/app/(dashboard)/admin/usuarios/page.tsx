@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageAdmin } from "@/lib/permissions";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableHeader,
@@ -10,6 +10,7 @@ import {
   TableRow,
   TableHead,
 } from "@/components/ui/table";
+import { CreateUserForm } from "./CreateUserForm";
 import { UserRow } from "./UserRow";
 
 export default async function UsuariosPage() {
@@ -28,6 +29,13 @@ export default async function UsuariosPage() {
       <p className="mb-6 text-sm text-navy-400">
         Gerencie o papel e o setor de cada usuário da plataforma.
       </p>
+
+      <Card className="mb-4 p-4">
+        <CardContent className="px-0">
+          <h2 className="mb-3 text-sm font-semibold text-navy-700">Novo usuário</h2>
+          <CreateUserForm departments={departments} />
+        </CardContent>
+      </Card>
 
       <Card className="overflow-hidden p-0">
         <Table>

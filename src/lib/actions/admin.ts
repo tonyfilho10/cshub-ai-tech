@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageAdmin } from "@/lib/permissions";
@@ -61,4 +62,53 @@ export async function updateUserDepartment(userId: string, departmentId: string)
   await requireAdmin();
   await prisma.user.update({ where: { id: userId }, data: { departmentId } });
   revalidatePath("/admin/usuarios");
+}
+
+export async function createUser(
+  _prevState: SimpleFormState,
+  formData: FormData
+): Promise<SimpleFormState> {
+  await requireAdmin();
+
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const role = String(formData.get("role") ?? "") as UserRole;
+  const departmentId = String(formData.get("departmentId") ?? "");
+
+  if (!name || !email || !password || !departmentId) {
+    return { error: "Preencha todos os campos." };
+  }
+  if (password.length < 6) {
+    return { error: "A senha deve ter pelo menos 6 caracteres." };
+  }
+  if (!["USER", "DEV_TEAM", "ADMIN"].includes(role)) {
+    return { error: "Papel inválido." };
+  }
+
+  const department = await prisma.department.findUnique({ where: { id: departmentId } });
+  if (!department) return { error: "Setor inválido." };
+
+  const supabase = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+  );
+
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error || !data.user) {
+    return { error: error?.message ?? "Não foi possível criar o usuário." };
+  }
+
+  try {
+    await prisma.user.create({
+      data: { authId: data.user.id, name, email, role, departmentId },
+    });
+  } catch {
+    return {
+      error: "Usuário criado na autenticação, mas houve um erro ao vincular o perfil.",
+    };
+  }
+
+  revalidatePath("/admin/usuarios");
+  return { error: null };
 }
