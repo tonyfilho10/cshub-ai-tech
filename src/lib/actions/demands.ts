@@ -24,6 +24,14 @@ export async function createDemand(
     return { error: "Preencha título e descrição." };
   }
 
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentDemand = await prisma.demand.findFirst({
+    where: { requesterId: user.id, createdAt: { gte: oneWeekAgo } },
+  });
+  if (recentDemand) {
+    return { error: "Você já registrou uma solicitação esta semana. Aguarde para enviar outra." };
+  }
+
   const demand = await prisma.demand.create({
     data: {
       title,

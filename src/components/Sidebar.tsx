@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ClipboardList,
-  PlusCircle,
   Archive,
   Building2,
   Users,
@@ -36,7 +35,6 @@ export function Sidebar({ role }: { role: UserRole }) {
 
   const items: NavItem[] = [
     { href: "/demandas", label: "Demandas", icon: ClipboardList },
-    { href: "/demandas/nova", label: "Nova Demanda", icon: PlusCircle },
   ];
 
   if (isDevTeam) {

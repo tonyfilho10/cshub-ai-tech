@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isDevTeam } from "@/lib/permissions";
 import { STATUS_LABELS, STATUS_ORDER } from "@/lib/constants";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { NovaSolicitacaoDialog } from "./NovaSolicitacaoDialog";
 
 export default async function DemandasPage() {
   const user = await getCurrentUser();
@@ -43,12 +43,7 @@ export default async function DemandasPage() {
               : "Suas demandas e as do seu setor"}
           </p>
         </div>
-        <Button
-          render={<Link href="/demandas/nova" />}
-          className="bg-accent-400 text-navy-900 hover:bg-accent-500"
-        >
-          + Nova Demanda
-        </Button>
+        <NovaSolicitacaoDialog />
       </div>
 
       <div className="grid grid-cols-1 gap-4 overflow-x-auto md:grid-cols-3 xl:grid-cols-6">
