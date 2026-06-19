@@ -41,6 +41,10 @@ export default async function DemandasPage() {
             },
           },
         },
+        suggestions: {
+          where: { sourceCommentId: { not: null } },
+          select: { sourceCommentId: true, status: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -69,11 +73,13 @@ export default async function DemandasPage() {
           ...d,
           commentCount: d.comments.length,
           recentComments: [...d.comments].reverse(),
+          promotedCommentIds: d.suggestions.map((s) => ({ commentId: s.sourceCommentId!, status: s.status })),
         }))}
         departments={departments}
         canChangeStatus={canChangeStatus(user)}
         userId={user.id}
         canArchive={isDevTeam(user.role)}
+        isDevTeam={isDevTeam(user.role)}
         mentionableUsers={mentionableUsers}
       />
     </div>

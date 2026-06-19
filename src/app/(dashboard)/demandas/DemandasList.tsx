@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Trash2, Pencil, X, Check, MessageSquare, Archive, Link2, Search, Send } from "lucide-react";
-import { setDemandStatus, deleteDemand, editDemand, archiveDemand, setToProducao, updateDemandDepartment } from "@/lib/actions/demands";
-import { toggleReaction, createComment } from "@/lib/actions/profile";
+import { ChevronDown, ChevronUp, Trash2, Pencil, X, Check, MessageSquare, Archive, Link2, Search, Send, Lightbulb, Undo2 } from "lucide-react";
+import { setDemandStatus, deleteDemand, editDemand, archiveDemand, setToProducao, updateDemandDepartment, promoteCommentToSuggestion, demoteToComment } from "@/lib/actions/demands";
+import { toggleReaction, createComment, editComment, deleteComment } from "@/lib/actions/profile";
 import { STATUS_LABELS, STATUS_BADGE_CLASSES } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PriorityBadge, PRIORITY_OPTIONS } from "@/components/PriorityBadge";
@@ -26,6 +26,7 @@ import type { DemandStatus, Priority } from "@prisma/client";
 type RecentReply = {
   id: string;
   content: string;
+  authorId: string;
   author: { name: string; avatarUrl: string | null };
 };
 
@@ -33,11 +34,14 @@ type RecentComment = {
   id: string;
   content: string;
   createdAt: Date;
+  authorId: string;
   author: { name: string; avatarUrl: string | null };
   replies: RecentReply[];
 };
 
 type DemandReaction = { emoji: string; author: { id: string } };
+
+type PromotedEntry = { commentId: string; status: string };
 
 type Demand = {
   id: string;
@@ -52,6 +56,7 @@ type Demand = {
   commentCount: number;
   recentComments: RecentComment[];
   reactions: DemandReaction[];
+  promotedCommentIds: PromotedEntry[];
 };
 
 type Department = { id: string; name: string };
@@ -72,6 +77,7 @@ export function DemandasList({
   canChangeStatus,
   userId,
   canArchive,
+  isDevTeam,
   mentionableUsers,
 }: {
   demands: Demand[];
@@ -79,6 +85,7 @@ export function DemandasList({
   canChangeStatus: boolean;
   userId: string;
   canArchive: boolean;
+  isDevTeam: boolean;
   mentionableUsers: MentionUser[];
 }) {
   const [statusFilter, setStatusFilter] = useState<DemandStatus | "TODOS">("TODOS");
@@ -111,45 +118,51 @@ export function DemandasList({
         />
       </div>
 
-      {/* Filtro de status */}
+      {/* Filtros */}
       <div className="flex flex-wrap gap-2">
-        <FilterChip active={statusFilter === "TODOS"} onClick={() => setStatusFilter("TODOS")}>
-          Todos ({demands.length})
-        </FilterChip>
-        {ALL_STATUSES.filter((s) => usedStatuses.includes(s)).map((s) => (
-          <FilterChip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-            {STATUS_LABELS[s]} ({demands.filter((d) => d.status === s).length})
-          </FilterChip>
-        ))}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as DemandStatus | "TODOS")}
+          className="rounded-lg border border-navy-200 dark:border-navy-700 bg-background px-2.5 py-1.5 text-xs text-navy-700 dark:text-navy-300 focus:outline-none focus:ring-2 focus:ring-accent-400"
+        >
+          <option value="TODOS">Todos os status ({demands.length})</option>
+          {ALL_STATUSES.filter((s) => usedStatuses.includes(s)).map((s) => (
+            <option key={s} value={s}>
+              {STATUS_LABELS[s]} ({demands.filter((d) => d.status === s).length})
+            </option>
+          ))}
+        </select>
+
+        {usedPriorities.length > 1 && (
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value as Priority | "TODAS")}
+            className="rounded-lg border border-navy-200 dark:border-navy-700 bg-background px-2.5 py-1.5 text-xs text-navy-700 dark:text-navy-300 focus:outline-none focus:ring-2 focus:ring-accent-400"
+          >
+            <option value="TODAS">Todas as prioridades</option>
+            {PRIORITY_OPTIONS.filter((o) => usedPriorities.includes(o.value)).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label} ({demands.filter((d) => d.priority === o.value).length})
+              </option>
+            ))}
+          </select>
+        )}
+
+        {departments.length > 0 && (
+          <select
+            value={deptFilter}
+            onChange={(e) => setDeptFilter(e.target.value)}
+            className="rounded-lg border border-navy-200 dark:border-navy-700 bg-background px-2.5 py-1.5 text-xs text-navy-700 dark:text-navy-300 focus:outline-none focus:ring-2 focus:ring-accent-400"
+          >
+            <option value="TODOS">Todos os setores</option>
+            {departments.filter((dept) => demands.some((d) => d.department.id === dept.id)).map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
-
-      {/* Filtro de prioridade */}
-      {usedPriorities.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          <FilterChip active={priorityFilter === "TODAS"} onClick={() => setPriorityFilter("TODAS")}>
-            Todas as prioridades
-          </FilterChip>
-          {PRIORITY_OPTIONS.filter((o) => usedPriorities.includes(o.value)).map((o) => (
-            <FilterChip key={o.value} active={priorityFilter === o.value} onClick={() => setPriorityFilter(o.value)}>
-              {o.label} ({demands.filter((d) => d.priority === o.value).length})
-            </FilterChip>
-          ))}
-        </div>
-      )}
-
-      {/* Filtro de departamento (só para dev/admin) */}
-      {departments.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <FilterChip active={deptFilter === "TODOS"} onClick={() => setDeptFilter("TODOS")}>
-            Todos os setores
-          </FilterChip>
-          {departments.filter((dept) => demands.some((d) => d.department.id === dept.id)).map((dept) => (
-            <FilterChip key={dept.id} active={deptFilter === dept.id} onClick={() => setDeptFilter(dept.id)}>
-              {dept.name}
-            </FilterChip>
-          ))}
-        </div>
-      )}
 
       {/* Cards */}
       {visible.length === 0 && (
@@ -165,6 +178,7 @@ export function DemandasList({
             isOwner={demand.requesterId === userId}
             canArchive={canArchive}
             currentUserId={userId}
+            isDevTeam={isDevTeam}
             mentionableUsers={mentionableUsers}
           />
         ))}
@@ -173,36 +187,62 @@ export function DemandasList({
   );
 }
 
-function RecentCommentItem({ comment, mentionableUsers }: { comment: RecentComment; mentionableUsers: MentionUser[] }) {
+function RecentCommentItem({
+  comment,
+  demandId,
+  currentUserId,
+  isDevTeam,
+  canSuggest,
+  promotedEntry,
+  mentionableUsers,
+}: {
+  comment: RecentComment;
+  demandId: string;
+  currentUserId: string;
+  isDevTeam: boolean;
+  canSuggest: boolean;
+  promotedEntry?: PromotedEntry;
+  mentionableUsers: MentionUser[];
+}) {
   const [showReplies, setShowReplies] = useState(false);
   return (
     <div>
-      <div className="flex gap-2">
-        <UserAvatar name={comment.author.name} avatarUrl={comment.author.avatarUrl} size="sm" className="shrink-0 mt-0.5" />
-        <div className="min-w-0">
-          <span className="text-xs font-medium text-navy-700 dark:text-navy-300">{comment.author.name} </span>
-          <span className="text-xs text-navy-600 dark:text-navy-400">{renderWithMentions(comment.content, mentionableUsers)}</span>
-          {comment.replies.length > 0 && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setShowReplies((v) => !v); }}
-              className="ml-2 text-xs text-accent-600 dark:text-accent-400 hover:underline"
-            >
-              {showReplies ? "ocultar" : `ver ${comment.replies.length} resposta${comment.replies.length > 1 ? "s" : ""}`}
-            </button>
-          )}
-        </div>
-      </div>
+      <CommentRow
+        id={comment.id}
+        content={comment.content}
+        authorId={comment.authorId}
+        authorName={comment.author.name}
+        authorAvatarUrl={comment.author.avatarUrl}
+        demandId={demandId}
+        currentUserId={currentUserId}
+        isDevTeam={isDevTeam}
+        canSuggest={canSuggest}
+        promotedEntry={promotedEntry}
+        mentionableUsers={mentionableUsers}
+      />
+      {comment.replies.length > 0 && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowReplies((v) => !v); }}
+          className="ml-9 mt-0.5 text-xs text-accent-600 dark:text-accent-400 hover:underline"
+        >
+          {showReplies ? "ocultar" : `ver ${comment.replies.length} resposta${comment.replies.length > 1 ? "s" : ""}`}
+        </button>
+      )}
       {showReplies && (
         <div className="mt-1.5 ml-7 space-y-1.5 border-l-2 border-navy-200 dark:border-navy-700 pl-3">
           {comment.replies.map((r) => (
-            <div key={r.id} className="flex gap-2">
-              <UserAvatar name={r.author.name} avatarUrl={r.author.avatarUrl} size="sm" className="shrink-0 mt-0.5" />
-              <div>
-                <span className="text-xs font-medium text-navy-700 dark:text-navy-300">{r.author.name} </span>
-                <span className="text-xs text-navy-600 dark:text-navy-400">{renderWithMentions(r.content, mentionableUsers)}</span>
-              </div>
-            </div>
+            <CommentRow
+              key={r.id}
+              id={r.id}
+              content={r.content}
+              authorId={r.authorId}
+              authorName={r.author.name}
+              authorAvatarUrl={r.author.avatarUrl}
+              demandId={demandId}
+              currentUserId={currentUserId}
+              mentionableUsers={mentionableUsers}
+            />
           ))}
         </div>
       )}
@@ -210,30 +250,166 @@ function RecentCommentItem({ comment, mentionableUsers }: { comment: RecentComme
   );
 }
 
-function FilterChip({
-  active,
-  onClick,
-  children,
+function CommentRow({
+  id,
+  content,
+  authorId,
+  authorName,
+  authorAvatarUrl,
+  demandId,
+  currentUserId,
+  isDevTeam = false,
+  canSuggest = false,
+  promotedEntry,
+  mentionableUsers,
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  id: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  authorAvatarUrl: string | null;
+  demandId: string;
+  currentUserId: string;
+  isDevTeam?: boolean;
+  canSuggest?: boolean;
+  promotedEntry?: PromotedEntry;
+  mentionableUsers: MentionUser[];
 }) {
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState(content);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  const isOwn = authorId === currentUserId;
+  const canPromote = canSuggest && (isOwn || isDevTeam);
+  const isPromoted = !!promotedEntry;
+  const canDemote = isPromoted && promotedEntry!.status === "PENDENTE" && (isOwn || isDevTeam);
+
+  function handleEdit() {
+    if (!editContent.trim()) return;
+    startTransition(async () => {
+      await editComment(id, editContent, demandId);
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  function handleDelete() {
+    startTransition(async () => {
+      await deleteComment(id, demandId);
+      router.refresh();
+    });
+  }
+
+  function handlePromote() {
+    startTransition(async () => {
+      try {
+        await promoteCommentToSuggestion(id, demandId);
+        router.refresh();
+      } catch {}
+    });
+  }
+
+  function handleDemote() {
+    startTransition(async () => {
+      try {
+        await demoteToComment(id, demandId);
+        router.refresh();
+      } catch {}
+    });
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-full border px-3 py-1 text-xs font-medium transition",
-        active
-          ? "border-accent-500 bg-accent-400 text-navy-900 dark:border-accent-400 dark:bg-accent-400/15 dark:text-accent-300"
-          : "border-navy-200 bg-white dark:bg-transparent dark:border-navy-700 text-navy-600 dark:text-navy-400 hover:border-accent-300 dark:hover:border-accent-500/50"
+    <div className="flex items-start gap-2" onClick={(e) => e.stopPropagation()}>
+      <UserAvatar name={authorName} avatarUrl={authorAvatarUrl} size="sm" className="shrink-0 mt-0.5" />
+      <div className="min-w-0 flex-1">
+        <span className="text-xs font-medium text-navy-700 dark:text-navy-300">{authorName} </span>
+        {editing ? (
+          <div className="mt-1 space-y-1.5">
+            <MentionTextarea
+              value={editContent}
+              onChange={setEditContent}
+              mentionableUsers={mentionableUsers}
+              rows={2}
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEdit(); } }}
+              className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent-400 resize-none"
+            />
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                disabled={pending || !editContent.trim()}
+                onClick={handleEdit}
+                className="flex items-center gap-1 rounded-lg bg-navy-800 dark:bg-navy-700 px-2 py-1 text-xs text-white hover:bg-navy-700 disabled:opacity-40"
+              >
+                <Check size={11} /> Salvar
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEditing(false); setEditContent(content); }}
+                className="flex items-center gap-1 rounded-lg border border-navy-200 dark:border-navy-700 px-2 py-1 text-xs text-navy-600 dark:text-navy-300 hover:bg-navy-50 dark:hover:bg-navy-800"
+              >
+                <X size={11} /> Cancelar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-navy-600 dark:text-navy-400">{renderWithMentions(content, mentionableUsers)}</span>
+        )}
+        {!editing && (canPromote || isPromoted) && (
+          <div className="mt-1 flex items-center gap-2">
+            {canPromote && !isPromoted && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={handlePromote}
+                className="flex items-center gap-0.5 text-[11px] font-medium text-amber-600 hover:text-amber-700 disabled:opacity-40 transition"
+              >
+                <Lightbulb size={10} /> Transformar em sugestão
+              </button>
+            )}
+            {isPromoted && promotedEntry!.status !== "PENDENTE" && (
+              <span className="flex items-center gap-0.5 text-[11px] font-medium text-emerald-600">
+                <Check size={10} /> Sugestão {promotedEntry!.status === "APROVADO" ? "aprovada" : "rejeitada"}
+              </span>
+            )}
+            {canDemote && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={handleDemote}
+                className="flex items-center gap-0.5 text-[11px] font-medium text-navy-400 hover:text-red-500 disabled:opacity-40 transition"
+              >
+                <Undo2 size={10} /> Desfazer sugestão
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {isOwn && !editing && (
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="rounded p-1 text-navy-400 hover:bg-navy-100 hover:text-navy-700 dark:hover:bg-navy-800 transition"
+            aria-label="Editar comentário"
+          >
+            <Pencil size={12} />
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleDelete}
+            className="rounded p-1 text-navy-400 hover:bg-red-50 hover:text-red-500 transition disabled:opacity-40"
+            aria-label="Excluir comentário"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
       )}
-    >
-      {children}
-    </button>
+    </div>
   );
 }
+
 
 const EMOJIS = ["👍", "❤️", "🚀", "🤔", "✅"];
 
@@ -248,6 +424,7 @@ function DemandCard({
   isOwner,
   canArchive,
   currentUserId,
+  isDevTeam,
   mentionableUsers,
 }: {
   demand: Demand;
@@ -256,6 +433,7 @@ function DemandCard({
   isOwner: boolean;
   canArchive: boolean;
   currentUserId: string;
+  isDevTeam: boolean;
   mentionableUsers: MentionUser[];
 }) {
   const [open, setOpen] = useState(false);
@@ -531,7 +709,16 @@ function DemandCard({
                   <p className="text-xs text-muted-foreground">Nenhum comentário ainda. Seja o primeiro!</p>
                 ) : (
                   demand.recentComments.map((c) => (
-                    <RecentCommentItem key={c.id} comment={c} mentionableUsers={mentionableUsers} />
+                    <RecentCommentItem
+                      key={c.id}
+                      comment={c}
+                      demandId={demand.id}
+                      currentUserId={currentUserId}
+                      isDevTeam={isDevTeam}
+                      canSuggest={demand.status !== "REJEITADO"}
+                      promotedEntry={demand.promotedCommentIds.find((p) => p.commentId === c.id)}
+                      mentionableUsers={mentionableUsers}
+                    />
                   ))
                 )}
               </div>
