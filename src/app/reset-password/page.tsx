@@ -1,18 +1,46 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { updatePassword } from "@/lib/actions/auth";
+import { createClient } from "@/lib/supabase/client";
 import { Eye, EyeOff, ArrowRight, CheckCircle } from "lucide-react";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [result, setResult] = useState<{ error: string | null; success: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
+  const [exchanging, setExchanging] = useState(true);
+  const [exchangeError, setExchangeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const code = searchParams.get("code");
+    if (!code) {
+      setExchangeError("Link inválido ou expirado. Solicite um novo e-mail de redefinição.");
+      setExchanging(false);
+      return;
+    }
+    const supabase = createClient();
+    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      if (error) {
+        setExchangeError("Este link expirou ou já foi usado. Solicite um novo e-mail de redefinição.");
+      }
+      setExchanging(false);
+    });
+  }, [searchParams]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +65,13 @@ export default function ResetPasswordPage() {
           <span className="font-semibold text-navy-900 dark:text-foreground">CSHUB</span>
         </div>
 
-        {result?.success ? (
+        {exchanging ? (
+          <p className="text-sm text-muted-foreground">Verificando link...</p>
+        ) : exchangeError ? (
+          <p className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+            {exchangeError}
+          </p>
+        ) : result?.success ? (
           <div className="space-y-4">
             <div className="flex items-center gap-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-4">
               <CheckCircle size={20} className="text-emerald-500 shrink-0" />
