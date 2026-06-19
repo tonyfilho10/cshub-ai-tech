@@ -365,6 +365,19 @@ export async function createDemandUpdate(demandId: string, content: string) {
   revalidatePath(`/demandas/${demandId}`);
 }
 
+export async function deleteDemandUpdate(updateId: string, demandId: string) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const update = await prisma.demandUpdate.findUnique({ where: { id: updateId } });
+  if (!update) throw new Error("Atualização não encontrada.");
+  if (update.authorId !== user.id && !isDevTeam(user.role)) throw new Error("Sem permissão.");
+
+  await prisma.demandUpdate.delete({ where: { id: updateId } });
+
+  revalidatePath(`/demandas/${demandId}`);
+}
+
 export async function createUpdateComment(updateId: string, demandId: string, content: string) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");

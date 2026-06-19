@@ -62,7 +62,7 @@ export default async function DemandaDetailPage({
       },
       updates: {
         include: {
-          author: { select: { name: true, avatarUrl: true } },
+          author: { select: { id: true, name: true, avatarUrl: true } },
           reactions: { include: { author: { select: { id: true } } } },
           comments: {
             include: { author: { select: { name: true, avatarUrl: true } } },
@@ -234,6 +234,7 @@ export default async function DemandaDetailPage({
             updates={demand.updates}
             currentUserId={user.id}
             canPost={canPost}
+            isDevTeam={isDevTeam(user.role)}
             mentionableUsers={mentionableUsers}
           />
         </CardContent>

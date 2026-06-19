@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Send, MessageSquare } from "lucide-react";
-import { createDemandUpdate, createUpdateComment, toggleUpdateReaction } from "@/lib/actions/demands";
+import { Send, MessageSquare, Trash2 } from "lucide-react";
+import { createDemandUpdate, createUpdateComment, toggleUpdateReaction, deleteDemandUpdate } from "@/lib/actions/demands";
 import { UserAvatar } from "@/components/UserAvatar";
 import { MentionTextarea, renderWithMentions, type MentionUser } from "@/components/MentionTextarea";
 
@@ -26,6 +26,7 @@ type Update = {
   id: string;
   content: string;
   createdAt: Date;
+  authorId: string;
   author: { name: string; avatarUrl: string | null };
   reactions: UpdateReaction[];
   comments: UpdateComment[];
@@ -36,12 +37,14 @@ export function DemandUpdatesSection({
   updates,
   currentUserId,
   canPost,
+  isDevTeam = false,
   mentionableUsers,
 }: {
   demandId: string;
   updates: Update[];
   currentUserId: string;
   canPost: boolean;
+  isDevTeam?: boolean;
   mentionableUsers: MentionUser[];
 }) {
   const [content, setContent] = useState("");
@@ -105,6 +108,7 @@ export function DemandUpdatesSection({
             update={upd}
             demandId={demandId}
             currentUserId={currentUserId}
+            isDevTeam={isDevTeam}
             mentionableUsers={mentionableUsers}
           />
         ))}
@@ -117,17 +121,27 @@ function UpdateCard({
   update,
   demandId,
   currentUserId,
+  isDevTeam,
   mentionableUsers,
 }: {
   update: Update;
   demandId: string;
   currentUserId: string;
+  isDevTeam: boolean;
   mentionableUsers: MentionUser[];
 }) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const canDelete = update.authorId === currentUserId || isDevTeam;
+
+  function handleDelete() {
+    startTransition(async () => {
+      await deleteDemandUpdate(update.id, demandId);
+      router.refresh();
+    });
+  }
 
   // Group reactions
   const reactionGroups = EMOJIS.map((emoji) => ({
@@ -155,16 +169,29 @@ function UpdateCard({
   return (
     <div className="rounded-xl border border-navy-200 dark:border-navy-700 bg-white dark:bg-card shadow-sm p-4 space-y-3">
       {/* Author + time */}
-      <div className="flex items-center gap-2">
-        <UserAvatar name={update.author.name} avatarUrl={update.author.avatarUrl} size="sm" />
-        <div>
-          <p className="text-xs font-semibold text-navy-800 dark:text-foreground">{update.author.name}</p>
-          <p className="text-xs text-muted-foreground">
-            {new Date(update.createdAt).toLocaleDateString("pt-BR", {
-              day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
-            })}
-          </p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <UserAvatar name={update.author.name} avatarUrl={update.author.avatarUrl} size="sm" />
+          <div>
+            <p className="text-xs font-semibold text-navy-800 dark:text-foreground">{update.author.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {new Date(update.createdAt).toLocaleDateString("pt-BR", {
+                day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+              })}
+            </p>
+          </div>
         </div>
+        {canDelete && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleDelete}
+            className="rounded p-1 text-navy-400 hover:bg-red-50 hover:text-red-500 transition disabled:opacity-40"
+            aria-label="Excluir atualização"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
 
       {/* Content */}
