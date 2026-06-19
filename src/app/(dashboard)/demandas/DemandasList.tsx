@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Trash2, Pencil, X, Check, MessageSquare, Archive, Link2, Search, Send, Lightbulb, Undo2 } from "lucide-react";
-import { setDemandStatus, deleteDemand, editDemand, archiveDemand, setToProducao, updateDemandDepartment, promoteCommentToSuggestion, demoteToComment } from "@/lib/actions/demands";
+import { setDemandStatus, deleteDemand, editDemand, archiveDemand, setToProducao, setToTeste, updateDemandDepartment, promoteCommentToSuggestion, demoteToComment } from "@/lib/actions/demands";
 import { toggleReaction, createComment, editComment, deleteComment } from "@/lib/actions/profile";
 import { STATUS_LABELS, STATUS_BADGE_CLASSES } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ProjectUrlBanner } from "@/components/ProjectUrlBanner";
 import { cn } from "@/lib/utils";
 import type { DemandStatus, Priority } from "@prisma/client";
 
@@ -53,6 +54,7 @@ type Demand = {
   requesterId: string;
   requester: { name: string };
   department: { id: string; name: string };
+  project: { projectUrl: string | null } | null;
   commentCount: number;
   recentComments: RecentComment[];
   reactions: DemandReaction[];
@@ -442,6 +444,7 @@ function DemandCard({
   const [rejectingReason, setRejectingReason] = useState("");
   const [showReject, setShowReject] = useState(false);
   const [showProducao, setShowProducao] = useState(false);
+  const [showTeste, setShowTeste] = useState(false);
   const [projectUrl, setProjectUrl] = useState("");
   const [showDelete, setShowDelete] = useState(false);
   const [justification, setJustification] = useState("");
@@ -460,6 +463,8 @@ function DemandCard({
     count: demand.reactions.filter((r) => r.emoji === emoji).length,
     reacted: demand.reactions.some((r) => r.emoji === emoji && r.author.id === currentUserId),
   }));
+  const distinctReactionEmojis = Array.from(new Set(demand.reactions.map((r) => r.emoji)));
+  const reactionSummaryEmoji = distinctReactionEmojis.length === 1 ? distinctReactionEmojis[0] : "🙂";
 
   function handleReaction(emoji: string) {
     startTransition(async () => {
@@ -540,7 +545,7 @@ function DemandCard({
                     : "bg-navy-50 dark:bg-navy-800/50 text-navy-400"
                 )}
               >
-                😀 {demand.reactions.length}
+                {reactionSummaryEmoji} {demand.reactions.length}
               </span>
               <span
                 className={cn(
@@ -668,6 +673,15 @@ function DemandCard({
             <div
               className="tiptap-prose"
               dangerouslySetInnerHTML={{ __html: demand.description }}
+            />
+          )}
+
+          {!editing && (
+            <ProjectUrlBanner
+              demandId={demand.id}
+              projectUrl={demand.project?.projectUrl ?? null}
+              status={demand.status}
+              isDevTeam={isDevTeam}
             />
           )}
 
@@ -856,12 +870,27 @@ function DemandCard({
                       key={s}
                       type="button"
                       disabled={pending || demand.status === s}
-                      onClick={() => { setShowProducao((v) => !v); setShowReject(false); }}
+                      onClick={() => { setShowProducao((v) => !v); setShowReject(false); setShowTeste(false); }}
                       className={cn(
                         "rounded-full border px-3 py-1 text-xs font-medium transition",
                         demand.status === s
                           ? "opacity-40 cursor-default border-emerald-300 bg-emerald-50 text-emerald-700"
                           : "border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+                      )}
+                    >
+                      {STATUS_LABELS[s]}
+                    </button>
+                  ) : s === "EM_TESTE" ? (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={pending || demand.status === s}
+                      onClick={() => { setShowTeste((v) => !v); setShowReject(false); setShowProducao(false); }}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition",
+                        demand.status === s
+                          ? "opacity-40 cursor-default border-amber-300 bg-amber-50 text-amber-700"
+                          : "border-amber-300 text-amber-600 hover:bg-amber-50"
                       )}
                     >
                       {STATUS_LABELS[s]}
@@ -936,6 +965,44 @@ function DemandCard({
                         });
                       }}
                       className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+                    >
+                      Confirmar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {showTeste && (
+                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 p-3">
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+                    <Link2 size={12} />
+                    Informe o link de acesso ao ambiente de teste
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={projectUrl}
+                      onChange={(e) => setProjectUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="flex-1 rounded-lg border border-amber-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                    <button
+                      type="button"
+                      disabled={pending || !projectUrl.trim()}
+                      onClick={() => {
+                        setError(null);
+                        startTransition(async () => {
+                          try {
+                            await setToTeste(demand.id, projectUrl);
+                            setShowTeste(false);
+                            setProjectUrl("");
+                            router.refresh();
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : "Erro ao mover para teste.");
+                          }
+                        });
+                      }}
+                      className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-navy-900 hover:bg-amber-400 disabled:opacity-40"
                     >
                       Confirmar
                     </button>

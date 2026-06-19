@@ -210,6 +210,18 @@ export async function setDemandStatus(
 }
 
 export async function setToProducao(demandId: string, projectUrl: string) {
+  return setStatusWithProjectUrl(demandId, "EM_PRODUCAO", projectUrl);
+}
+
+export async function setToTeste(demandId: string, projectUrl: string) {
+  return setStatusWithProjectUrl(demandId, "EM_TESTE", projectUrl);
+}
+
+async function setStatusWithProjectUrl(
+  demandId: string,
+  status: "EM_TESTE" | "EM_PRODUCAO",
+  projectUrl: string
+) {
   const user = await getCurrentUser();
   if (!user || !isDevTeam(user.role)) throw new Error("Sem permissão.");
 
@@ -218,8 +230,26 @@ export async function setToProducao(demandId: string, projectUrl: string) {
 
   await prisma.demand.update({
     where: { id: demandId },
-    data: { status: "EM_PRODUCAO" },
+    data: { status },
   });
+
+  await prisma.project.upsert({
+    where: { demandId },
+    update: { projectUrl: url },
+    create: { demandId, technicalSpec: "", technologies: "", projectUrl: url },
+  });
+
+  revalidatePath(`/demandas/${demandId}`);
+  revalidatePath("/demandas");
+  revalidatePath("/dashboard");
+}
+
+export async function upsertProjectUrl(demandId: string, projectUrl: string) {
+  const user = await getCurrentUser();
+  if (!user || !isDevTeam(user.role)) throw new Error("Sem permissão.");
+
+  const url = projectUrl.trim();
+  if (!url) throw new Error("Informe o link de acesso ao projeto.");
 
   await prisma.project.upsert({
     where: { demandId },

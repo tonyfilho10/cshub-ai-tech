@@ -5,6 +5,7 @@ import { canChangeStatus, canViewDemand, canViewProjectSpec, isDevTeam, SHARED_D
 import { NEXT_STATUSES } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PriorityBadge } from "@/components/PriorityBadge";
+import { ProjectUrlBanner } from "@/components/ProjectUrlBanner";
 import { PrioritySelector } from "./PrioritySelector";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusActions } from "./StatusActions";
@@ -133,6 +134,13 @@ export default async function DemandaDetailPage({
           )}
         </CardContent>
       </Card>
+
+      <ProjectUrlBanner
+        demandId={demand.id}
+        projectUrl={demand.project?.projectUrl ?? null}
+        status={demand.status}
+        isDevTeam={isDevTeam(user.role)}
+      />
 
       {isRequester && (
         <ClientDemandActions

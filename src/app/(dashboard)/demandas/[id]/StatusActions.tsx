@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateDemandStatus, setToProducao } from "@/lib/actions/demands";
+import { updateDemandStatus, setToProducao, setToTeste } from "@/lib/actions/demands";
 import { STATUS_LABELS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +23,7 @@ export function StatusActions({
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [goingToProducao, setGoingToProducao] = useState(false);
+  const [goingToTeste, setGoingToTeste] = useState(false);
   const [projectUrl, setProjectUrl] = useState("");
   const router = useRouter();
 
@@ -53,6 +54,20 @@ export function StatusActions({
     });
   }
 
+  function handleTeste() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setToTeste(demandId, projectUrl);
+        setGoingToTeste(false);
+        setProjectUrl("");
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erro ao mover para teste.");
+      }
+    });
+  }
+
   if (nextStatuses.length === 0) return null;
 
   return (
@@ -76,8 +91,18 @@ export function StatusActions({
                 key={status}
                 type="button"
                 disabled={pending}
-                onClick={() => { setGoingToProducao((v) => !v); setRejecting(false); }}
+                onClick={() => { setGoingToProducao((v) => !v); setRejecting(false); setGoingToTeste(false); }}
                 className="bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                {STATUS_LABELS[status]}
+              </Button>
+            ) : status === "EM_TESTE" ? (
+              <Button
+                key={status}
+                type="button"
+                disabled={pending}
+                onClick={() => { setGoingToTeste((v) => !v); setRejecting(false); setGoingToProducao(false); }}
+                className="bg-amber-500 text-navy-900 hover:bg-amber-400"
               >
                 {STATUS_LABELS[status]}
               </Button>
@@ -115,6 +140,30 @@ export function StatusActions({
               className="bg-emerald-600 text-white hover:bg-emerald-700"
             >
               {pending ? "Confirmando..." : "Confirmar e colocar em produção"}
+            </Button>
+          </div>
+        )}
+
+        {goingToTeste && (
+          <div className="mt-3 space-y-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 p-3">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+              <Link2 size={13} />
+              Informe o link de acesso ao ambiente de teste
+            </p>
+            <Input
+              type="url"
+              value={projectUrl}
+              onChange={(e) => setProjectUrl(e.target.value)}
+              placeholder="https://..."
+              className="text-sm"
+            />
+            <Button
+              type="button"
+              disabled={pending || !projectUrl.trim()}
+              onClick={handleTeste}
+              className="bg-amber-500 text-navy-900 hover:bg-amber-400"
+            >
+              {pending ? "Confirmando..." : "Confirmar e colocar em teste"}
             </Button>
           </div>
         )}

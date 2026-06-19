@@ -28,6 +28,7 @@ export default async function DemandasPage() {
       include: {
         requester: { select: { name: true } },
         department: { select: { id: true, name: true } },
+        project: { select: { projectUrl: true } },
         reactions: { include: { author: { select: { id: true } } } },
         comments: {
           where: { parentId: null },
