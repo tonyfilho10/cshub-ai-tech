@@ -142,10 +142,8 @@ export function Sidebar({
       <div className={cn("border-t border-[#16294a] py-4", collapsed ? "px-0 flex justify-center" : "px-3")}>
         {collapsed ? (
           <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" className="mx-auto flex">
-                <UserAvatar name={name} avatarUrl={avatarUrl} size="sm" />
-              </button>
+            <TooltipTrigger render={<button type="button" className="mx-auto flex" />}>
+              <UserAvatar name={name} avatarUrl={avatarUrl} size="sm" />
             </TooltipTrigger>
             <TooltipContent side="right">{name} · Perfil</TooltipContent>
           </Tooltip>
