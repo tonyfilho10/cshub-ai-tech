@@ -24,6 +24,19 @@ enum DemandStatus {
   EM_PRODUCAO
 }
 
+enum Priority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum SuggestionStatus {
+  PENDENTE
+  APROVADO
+  REJEITADO
+}
+
 model Department {
   id        String   @id @default(cuid())
   name      String   @unique
@@ -33,30 +46,134 @@ model Department {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  authId       String     @unique
-  name         String
-  email        String     @unique
-  role         UserRole   @default(USER)
-  departmentId String
-  department   Department @relation(fields: [departmentId], references: [id])
-  demands      Demand[]
-  createdAt    DateTime   @default(now())
+  id              String          @id @default(cuid())
+  authId          String          @unique
+  name            String
+  email           String          @unique
+  avatarUrl       String?
+  role            UserRole        @default(USER)
+  departmentId    String
+  department      Department      @relation(fields: [departmentId], references: [id])
+  demands         Demand[]
+  suggestions     Suggestion[]
+  comments        Comment[]
+  reactions       Reaction[]
+  demandUpdates   DemandUpdate[]
+  updateComments  UpdateComment[]
+  updateReactions UpdateReaction[]
+  notifications   Notification[]
+  createdAt       DateTime        @default(now())
+}
+
+enum NotificationType {
+  MENTION_COMMENT
+  MENTION_UPDATE
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  fromName    String
+  demandId    String
+  demandTitle String
+  linkUrl     String
+  read        Boolean          @default(false)
+  createdAt   DateTime         @default(now())
 }
 
 model Demand {
-  id              String       @id @default(cuid())
+  id              String         @id @default(cuid())
   title           String
   description     String
-  status          DemandStatus @default(SOLICITADO)
+  status          DemandStatus   @default(SOLICITADO)
+  priority        Priority       @default(MEDIA)
   rejectionReason String?
+  archived        Boolean        @default(false)
   requesterId     String
-  requester       User         @relation(fields: [requesterId], references: [id])
+  requester       User           @relation(fields: [requesterId], references: [id])
   departmentId    String
-  department      Department   @relation(fields: [departmentId], references: [id])
+  department      Department     @relation(fields: [departmentId], references: [id])
   project         Project?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  suggestions     Suggestion[]
+  comments        Comment[]
+  reactions       Reaction[]
+  updates         DemandUpdate[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  content   String    @db.Text
+  demandId  String
+  demand    Demand    @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id])
+  parentId  String?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  createdAt DateTime  @default(now())
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  demandId  String
+  demand    Demand   @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([demandId, authorId, emoji])
+}
+
+model Suggestion {
+  id              String           @id @default(cuid())
+  content         String           @db.Text
+  demandId        String
+  demand          Demand           @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  authorId        String
+  author          User             @relation(fields: [authorId], references: [id])
+  status          SuggestionStatus @default(PENDENTE)
+  rejectionReason String?
+  sourceCommentId String?          @unique
+  createdAt       DateTime         @default(now())
+}
+
+model DemandUpdate {
+  id        String          @id @default(cuid())
+  content   String          @db.Text
+  demandId  String
+  demand    Demand          @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User            @relation(fields: [authorId], references: [id])
+  comments  UpdateComment[]
+  reactions UpdateReaction[]
+  createdAt DateTime        @default(now())
+}
+
+model UpdateComment {
+  id        String       @id @default(cuid())
+  content   String       @db.Text
+  updateId  String
+  update    DemandUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User         @relation(fields: [authorId], references: [id])
+  createdAt DateTime     @default(now())
+}
+
+model UpdateReaction {
+  id        String       @id @default(cuid())
+  emoji     String
+  updateId  String
+  update    DemandUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User         @relation(fields: [authorId], references: [id])
+  createdAt DateTime     @default(now())
+
+  @@unique([updateId, authorId, emoji])
 }
 
 model Project {
@@ -65,6 +182,7 @@ model Project {
   demand        Demand   @relation(fields: [demandId], references: [id])
   technicalSpec String   @db.Text
   technologies  String
+  projectUrl    String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

@@ -2,16 +2,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageAdmin } from "@/lib/permissions";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-} from "@/components/ui/table";
 import { CreateUserForm } from "./CreateUserForm";
-import { UserRow } from "./UserRow";
+import { UsersClient } from "./UsersClient";
 
 export default async function UsuariosPage() {
   const user = await getCurrentUser();
@@ -19,7 +11,10 @@ export default async function UsuariosPage() {
   if (!canManageAdmin(user)) redirect("/demandas");
 
   const [users, departments] = await Promise.all([
-    prisma.user.findMany({ orderBy: { name: "asc" } }),
+    prisma.user.findMany({
+      orderBy: { name: "asc" },
+      include: { department: { select: { name: true } } },
+    }),
     prisma.department.findMany({ orderBy: { name: "asc" } }),
   ]);
 
@@ -30,29 +25,12 @@ export default async function UsuariosPage() {
         Gerencie o papel e o setor de cada usuário da plataforma.
       </p>
 
-      <Card className="mb-4 p-4">
-        <CardContent className="px-0">
-          <h2 className="mb-3 text-sm font-semibold text-navy-700">Novo usuário</h2>
-          <CreateUserForm departments={departments} />
-        </CardContent>
-      </Card>
+      <div className="mb-4 rounded-xl border border-navy-100 dark:border-navy-800 bg-white dark:bg-card p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold text-navy-700 dark:text-navy-300">Novo usuário</h2>
+        <CreateUserForm departments={departments} />
+      </div>
 
-      <Card className="overflow-hidden p-0">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-navy-50 text-xs uppercase text-navy-400 hover:bg-navy-50">
-              <TableHead className="px-4 py-3">Usuário</TableHead>
-              <TableHead className="px-4 py-3">Papel</TableHead>
-              <TableHead className="px-4 py-3">Setor</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((u) => (
-              <UserRow key={u.id} user={u} departments={departments} />
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+      <UsersClient users={users} departments={departments} />
     </div>
   );
 }

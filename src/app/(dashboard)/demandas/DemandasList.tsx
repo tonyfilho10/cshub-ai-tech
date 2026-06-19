@@ -1,0 +1,610 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ChevronDown, ChevronUp, Trash2, Pencil, X, Check, MessageSquare, Archive, Link2 } from "lucide-react";
+import { setDemandStatus, deleteDemand, editDemand, archiveDemand, setToProducao } from "@/lib/actions/demands";
+import { toggleReaction } from "@/lib/actions/profile";
+import { STATUS_LABELS, STATUS_BADGE_CLASSES } from "@/lib/constants";
+import { StatusBadge } from "@/components/StatusBadge";
+import { PriorityBadge, PRIORITY_OPTIONS } from "@/components/PriorityBadge";
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { UserAvatar } from "@/components/UserAvatar";
+import { cn } from "@/lib/utils";
+import type { DemandStatus, Priority } from "@prisma/client";
+
+type RecentReply = {
+  id: string;
+  content: string;
+  author: { name: string; avatarUrl: string | null };
+};
+
+type RecentComment = {
+  id: string;
+  content: string;
+  createdAt: Date;
+  author: { name: string; avatarUrl: string | null };
+  replies: RecentReply[];
+};
+
+type DemandReaction = { emoji: string; author: { id: string } };
+
+type Demand = {
+  id: string;
+  title: string;
+  description: string;
+  status: DemandStatus;
+  priority: Priority;
+  createdAt: Date;
+  requesterId: string;
+  requester: { name: string };
+  department: { id: string; name: string };
+  commentCount: number;
+  recentComments: RecentComment[];
+  reactions: DemandReaction[];
+};
+
+type Department = { id: string; name: string };
+
+const ALL_STATUSES: DemandStatus[] = [
+  "SOLICITADO",
+  "EM_ANALISE",
+  "APROVADO",
+  "REJEITADO",
+  "EM_DESENVOLVIMENTO",
+  "EM_TESTE",
+  "EM_PRODUCAO",
+];
+
+export function DemandasList({
+  demands,
+  departments,
+  canChangeStatus,
+  userId,
+  canArchive,
+}: {
+  demands: Demand[];
+  departments: Department[];
+  canChangeStatus: boolean;
+  userId: string;
+  canArchive: boolean;
+}) {
+  const [statusFilter, setStatusFilter] = useState<DemandStatus | "TODOS">("TODOS");
+  const [deptFilter, setDeptFilter] = useState<string | "TODOS">("TODOS");
+  const [priorityFilter, setPriorityFilter] = useState<Priority | "TODAS">("TODAS");
+
+  const visible = demands.filter((d) => {
+    if (statusFilter !== "TODOS" && d.status !== statusFilter) return false;
+    if (deptFilter !== "TODOS" && d.department.id !== deptFilter) return false;
+    if (priorityFilter !== "TODAS" && d.priority !== priorityFilter) return false;
+    return true;
+  });
+
+  const usedStatuses = Array.from(new Set(demands.map((d) => d.status)));
+  const usedPriorities = Array.from(new Set(demands.map((d) => d.priority)));
+
+  return (
+    <div className="space-y-4">
+      {/* Filtro de status */}
+      <div className="flex flex-wrap gap-2">
+        <FilterChip active={statusFilter === "TODOS"} onClick={() => setStatusFilter("TODOS")}>
+          Todos ({demands.length})
+        </FilterChip>
+        {ALL_STATUSES.filter((s) => usedStatuses.includes(s)).map((s) => (
+          <FilterChip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
+            {STATUS_LABELS[s]} ({demands.filter((d) => d.status === s).length})
+          </FilterChip>
+        ))}
+      </div>
+
+      {/* Filtro de prioridade */}
+      {usedPriorities.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          <FilterChip active={priorityFilter === "TODAS"} onClick={() => setPriorityFilter("TODAS")}>
+            Todas as prioridades
+          </FilterChip>
+          {PRIORITY_OPTIONS.filter((o) => usedPriorities.includes(o.value)).map((o) => (
+            <FilterChip key={o.value} active={priorityFilter === o.value} onClick={() => setPriorityFilter(o.value)}>
+              {o.label} ({demands.filter((d) => d.priority === o.value).length})
+            </FilterChip>
+          ))}
+        </div>
+      )}
+
+      {/* Filtro de departamento (só para dev/admin) */}
+      {departments.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <FilterChip active={deptFilter === "TODOS"} onClick={() => setDeptFilter("TODOS")}>
+            Todos os setores
+          </FilterChip>
+          {departments.filter((dept) => demands.some((d) => d.department.id === dept.id)).map((dept) => (
+            <FilterChip key={dept.id} active={deptFilter === dept.id} onClick={() => setDeptFilter(dept.id)}>
+              {dept.name}
+            </FilterChip>
+          ))}
+        </div>
+      )}
+
+      {/* Cards */}
+      {visible.length === 0 && (
+        <p className="text-sm text-muted-foreground">Nenhuma solicitação.</p>
+      )}
+      <div className="space-y-3">
+        {visible.map((demand) => (
+          <DemandCard
+            key={demand.id}
+            demand={demand}
+            canChangeStatus={canChangeStatus}
+            isOwner={demand.requesterId === userId}
+            canArchive={canArchive}
+            currentUserId={userId}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecentCommentItem({ comment }: { comment: RecentComment }) {
+  const [showReplies, setShowReplies] = useState(false);
+  return (
+    <div>
+      <div className="flex gap-2">
+        <UserAvatar name={comment.author.name} avatarUrl={comment.author.avatarUrl} size="sm" className="shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <span className="text-xs font-medium text-navy-700 dark:text-navy-300">{comment.author.name} </span>
+          <span className="text-xs text-navy-600 dark:text-navy-400">{comment.content}</span>
+          {comment.replies.length > 0 && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowReplies((v) => !v); }}
+              className="ml-2 text-xs text-accent-600 dark:text-accent-400 hover:underline"
+            >
+              {showReplies ? "ocultar" : `ver ${comment.replies.length} resposta${comment.replies.length > 1 ? "s" : ""}`}
+            </button>
+          )}
+        </div>
+      </div>
+      {showReplies && (
+        <div className="mt-1.5 ml-7 space-y-1.5 border-l-2 border-navy-200 dark:border-navy-700 pl-3">
+          {comment.replies.map((r) => (
+            <div key={r.id} className="flex gap-2">
+              <UserAvatar name={r.author.name} avatarUrl={r.author.avatarUrl} size="sm" className="shrink-0 mt-0.5" />
+              <div>
+                <span className="text-xs font-medium text-navy-700 dark:text-navy-300">{r.author.name} </span>
+                <span className="text-xs text-navy-600 dark:text-navy-400">{r.content}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full border px-3 py-1 text-xs font-medium transition",
+        active
+          ? "border-accent-500 bg-accent-400 text-navy-900 dark:border-accent-400 dark:bg-accent-400/15 dark:text-accent-300"
+          : "border-navy-200 bg-white dark:bg-transparent dark:border-navy-700 text-navy-600 dark:text-navy-400 hover:border-accent-300 dark:hover:border-accent-500/50"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+const EMOJIS = ["👍", "❤️", "🚀", "🤔", "✅"];
+
+function DemandCard({
+  demand,
+  canChangeStatus,
+  isOwner,
+  canArchive,
+  currentUserId,
+}: {
+  demand: Demand;
+  canChangeStatus: boolean;
+  isOwner: boolean;
+  canArchive: boolean;
+  currentUserId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [rejectingReason, setRejectingReason] = useState("");
+  const [showReject, setShowReject] = useState(false);
+  const [showProducao, setShowProducao] = useState(false);
+  const [projectUrl, setProjectUrl] = useState("");
+  const [showDelete, setShowDelete] = useState(false);
+  const [justification, setJustification] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(demand.title);
+  const [editDescription, setEditDescription] = useState(demand.description);
+  const [editPriority, setEditPriority] = useState<Priority>(demand.priority);
+  const router = useRouter();
+
+  const lockedStatuses: DemandStatus[] = ["EM_DESENVOLVIMENTO", "EM_TESTE", "EM_PRODUCAO"];
+  const canEdit = isOwner && !lockedStatuses.includes(demand.status);
+
+  const reactionGroups = EMOJIS.map((emoji) => ({
+    emoji,
+    count: demand.reactions.filter((r) => r.emoji === emoji).length,
+    reacted: demand.reactions.some((r) => r.emoji === emoji && r.author.id === currentUserId),
+  })).filter((g) => g.count > 0);
+
+  function handleReaction(emoji: string) {
+    startTransition(async () => {
+      await toggleReaction(demand.id, emoji);
+      router.refresh();
+    });
+  }
+
+  function changeStatus(status: DemandStatus, reason?: string) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setDemandStatus(demand.id, status, reason);
+        setShowReject(false);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erro ao atualizar status.");
+      }
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-navy-100 dark:border-navy-800 bg-white dark:bg-card shadow-sm">
+      {/* Header do card */}
+      <div className="flex items-center gap-2 px-5 py-4">
+        <button
+          type="button"
+          onClick={() => { setOpen((v) => !v); setEditing(false); }}
+          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <PriorityBadge priority={demand.priority} />
+              <StatusBadge status={demand.status} />
+              <span className="text-xs text-muted-foreground">
+                {demand.department.name} · por {demand.requester.name}
+              </span>
+            </div>
+            <p className="mt-1 font-medium text-navy-900 line-clamp-1">{demand.title}</p>
+          </div>
+          {reactionGroups.length > 0 && (
+            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+              {reactionGroups.map(({ emoji, count, reacted }) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => handleReaction(emoji)}
+                  className={cn(
+                    "flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs transition",
+                    reacted
+                      ? "border-accent-400 bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-400"
+                      : "border-navy-200 dark:border-navy-700 bg-white dark:bg-card hover:border-accent-300"
+                  )}
+                >
+                  {emoji} <span className="text-navy-600 dark:text-navy-400">{count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {demand.commentCount > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-navy-100 dark:bg-navy-700 px-2 py-0.5 text-xs text-navy-500 dark:text-navy-300 shrink-0">
+              <MessageSquare size={11} />
+              {demand.commentCount}
+            </span>
+          )}
+          {open ? (
+            <ChevronUp size={16} className="shrink-0 text-navy-400" />
+          ) : (
+            <ChevronDown size={16} className="shrink-0 text-navy-400" />
+          )}
+        </button>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setOpen(true); setEditing((v) => !v); setError(null); }}
+            className={cn(
+              "shrink-0 rounded-lg p-1.5 transition",
+              editing
+                ? "bg-accent-100 text-accent-600"
+                : "text-navy-400 hover:bg-navy-100 hover:text-navy-700"
+            )}
+            aria-label="Editar"
+          >
+            <Pencil size={14} />
+          </button>
+        )}
+        {canArchive && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              startTransition(async () => {
+                try { await archiveDemand(demand.id); router.refresh(); }
+                catch (e) { setError(e instanceof Error ? e.message : "Erro ao arquivar."); }
+              });
+            }}
+            disabled={pending}
+            title="Arquivar solicitação"
+            className="shrink-0 rounded-lg p-1.5 text-navy-400 hover:bg-navy-100 hover:text-navy-700 transition disabled:opacity-40"
+          >
+            <Archive size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* Conteúdo expandido */}
+      {open && (
+        <div className="border-t border-navy-100 dark:border-navy-800 px-5 py-4 space-y-4">
+          {editing ? (
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-background px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent-400"
+              />
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-navy-500">Prioridade</label>
+                <select
+                  value={editPriority}
+                  onChange={(e) => setEditPriority(e.target.value as Priority)}
+                  className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+                >
+                  {PRIORITY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <RichTextEditor
+                value={editDescription}
+                onChange={setEditDescription}
+              />
+              {error && <p className="text-xs text-red-600">{error}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    setError(null);
+                    startTransition(async () => {
+                      try {
+                        await editDemand(demand.id, editTitle, editDescription, editPriority);
+                        setEditing(false);
+                        router.refresh();
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Erro ao salvar.");
+                      }
+                    });
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-navy-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-navy-700 disabled:opacity-40"
+                >
+                  <Check size={13} />
+                  {pending ? "Salvando..." : "Salvar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditing(false); setEditTitle(demand.title); setEditDescription(demand.description); setError(null); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-navy-200 dark:border-navy-700 px-3 py-1.5 text-xs text-navy-600 dark:text-navy-300 hover:bg-navy-50 dark:hover:bg-navy-800"
+                >
+                  <X size={13} />
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="tiptap-prose"
+              dangerouslySetInnerHTML={{ __html: demand.description }}
+            />
+          )}
+
+          {/* Comments preview */}
+          {!editing && demand.recentComments.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-navy-100 dark:border-navy-800 bg-navy-50 dark:bg-navy-900/30 p-3">
+              <p className="text-xs font-semibold text-navy-400 uppercase tracking-wide flex items-center gap-1">
+                <MessageSquare size={11} />
+                Comentários recentes
+              </p>
+              {demand.recentComments.map((c) => (
+                <RecentCommentItem key={c.id} comment={c} />
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <Link
+              href={`/demandas/${demand.id}`}
+              className="text-xs text-accent-600 hover:underline"
+            >
+              Ver detalhes completos →
+            </Link>
+
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => { setShowDelete((v) => !v); setError(null); }}
+                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700"
+              >
+                <Trash2 size={13} />
+                Excluir
+              </button>
+            )}
+          </div>
+
+          {showDelete && (
+            <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-xs text-red-600 font-medium">Informe o motivo da exclusão:</p>
+              <input
+                type="text"
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                placeholder="Justificativa..."
+                className="w-full rounded-lg border border-red-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={pending || !justification.trim()}
+                  onClick={() => {
+                    startTransition(async () => {
+                      try { await deleteDemand(demand.id, justification); router.refresh(); }
+                      catch (e) { setError(e instanceof Error ? e.message : "Erro ao excluir."); }
+                    });
+                  }}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-40"
+                >
+                  {pending ? "Excluindo..." : "Confirmar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowDelete(false); setJustification(""); setError(null); }}
+                  className="rounded-lg border border-navy-200 px-3 py-1.5 text-xs text-navy-600 hover:bg-navy-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {canChangeStatus && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-navy-500 uppercase tracking-wide">
+                Alterar status
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {ALL_STATUSES.map((s) =>
+                  s === "REJEITADO" ? (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={pending || demand.status === s}
+                      onClick={() => { setShowReject((v) => !v); setShowProducao(false); }}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition",
+                        demand.status === s
+                          ? "opacity-40 cursor-default border-red-300 bg-red-50 text-red-700"
+                          : "border-red-300 text-red-600 hover:bg-red-50"
+                      )}
+                    >
+                      {STATUS_LABELS[s]}
+                    </button>
+                  ) : s === "EM_PRODUCAO" ? (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={pending || demand.status === s}
+                      onClick={() => { setShowProducao((v) => !v); setShowReject(false); }}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition",
+                        demand.status === s
+                          ? "opacity-40 cursor-default border-emerald-300 bg-emerald-50 text-emerald-700"
+                          : "border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+                      )}
+                    >
+                      {STATUS_LABELS[s]}
+                    </button>
+                  ) : (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={pending || demand.status === s}
+                      onClick={() => changeStatus(s)}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition",
+                        demand.status === s
+                          ? "opacity-40 cursor-default " + STATUS_BADGE_CLASSES[s]
+                          : "border-navy-200 text-navy-600 hover:border-accent-300 hover:bg-accent-50"
+                      )}
+                    >
+                      {STATUS_LABELS[s]}
+                    </button>
+                  )
+                )}
+              </div>
+
+              {showReject && (
+                <div className="flex gap-2 items-start">
+                  <input
+                    type="text"
+                    value={rejectingReason}
+                    onChange={(e) => setRejectingReason(e.target.value)}
+                    placeholder="Motivo da rejeição..."
+                    className="flex-1 rounded-lg border border-navy-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+                  />
+                  <button
+                    type="button"
+                    disabled={pending || !rejectingReason.trim()}
+                    onClick={() => changeStatus("REJEITADO", rejectingReason)}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-40"
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              )}
+
+              {showProducao && (
+                <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/10 dark:border-emerald-800 p-3">
+                  <p className="text-xs font-medium text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
+                    <Link2 size={12} />
+                    Informe o link de acesso ao projeto
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={projectUrl}
+                      onChange={(e) => setProjectUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="flex-1 rounded-lg border border-emerald-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    />
+                    <button
+                      type="button"
+                      disabled={pending || !projectUrl.trim()}
+                      onClick={() => {
+                        setError(null);
+                        startTransition(async () => {
+                          try {
+                            await setToProducao(demand.id, projectUrl);
+                            setShowProducao(false);
+                            setProjectUrl("");
+                            router.refresh();
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : "Erro ao mover para produção.");
+                          }
+                        });
+                      }}
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+                    >
+                      Confirmar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {error && <p className="text-xs text-red-600">{error}</p>}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -12,7 +12,7 @@ export default async function ArquivadasPage() {
   if (!isDevTeam(user.role)) redirect("/demandas");
 
   const demands = await prisma.demand.findMany({
-    where: { status: "REJEITADO" },
+    where: { OR: [{ status: "REJEITADO" }, { archived: true }] },
     include: {
       requester: { select: { name: true } },
       department: { select: { name: true } },
@@ -22,9 +22,9 @@ export default async function ArquivadasPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-xl font-semibold text-navy-900">Demandas arquivadas</h1>
+      <h1 className="mb-1 text-xl font-semibold text-navy-900">Solicitações arquivadas</h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        Demandas rejeitadas pelo time de desenvolvimento.
+        Solicitações rejeitadas ou arquivadas pelo time de desenvolvimento.
       </p>
 
       <div className="space-y-2">
@@ -37,12 +37,17 @@ export default async function ArquivadasPage() {
                   {demand.department.name} · por {demand.requester.name}
                 </p>
               </div>
-              <StatusBadge status={demand.status} />
+              <div className="flex items-center gap-2">
+                <StatusBadge status={demand.status} />
+                {demand.archived && (
+                  <span className="rounded-full bg-navy-100 px-2 py-0.5 text-xs text-navy-500">Arquivado</span>
+                )}
+              </div>
             </Card>
           </Link>
         ))}
         {demands.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nenhuma demanda arquivada.</p>
+          <p className="text-sm text-muted-foreground">Nenhuma solicitação arquivada.</p>
         )}
       </div>
     </div>

@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { PlusCircle } from "lucide-react";
 import { createDemand, type DemandFormState } from "@/lib/actions/demands";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { PRIORITY_OPTIONS } from "@/components/PriorityBadge";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ const initialState: DemandFormState = { error: null };
 
 export function NovaSolicitacaoDialog() {
   const [state, formAction, pending] = useActionState(createDemand, initialState);
+  const [description, setDescription] = useState("");
 
   return (
     <Dialog>
@@ -52,14 +54,25 @@ export function NovaSolicitacaoDialog() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="description">Descrição</Label>
-            <Textarea
-              id="description"
-              name="description"
-              required
-              rows={6}
-              placeholder="Descreva o problema, o objetivo e o impacto esperado..."
+            <Label htmlFor="priority">Prioridade</Label>
+            <select
+              id="priority"
+              name="priority"
+              defaultValue="MEDIA"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+            >
+              {PRIORITY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Descrição</Label>
+            <RichTextEditor
+              value={description}
+              onChange={setDescription}
             />
+            <input type="hidden" name="description" value={description} />
           </div>
 
           {state.error && <p className="text-sm text-destructive">{state.error}</p>}

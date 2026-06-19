@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateDemandStatus } from "@/lib/actions/demands";
+import { updateDemandStatus, setToProducao } from "@/lib/actions/demands";
 import { STATUS_LABELS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Link2 } from "lucide-react";
 import type { DemandStatus } from "@prisma/client";
 
 export function StatusActions({
@@ -20,6 +22,8 @@ export function StatusActions({
   const [error, setError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
+  const [goingToProducao, setGoingToProducao] = useState(false);
+  const [projectUrl, setProjectUrl] = useState("");
   const router = useRouter();
 
   function handleChange(status: DemandStatus, rejectionReason?: string) {
@@ -31,6 +35,20 @@ export function StatusActions({
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erro ao atualizar status.");
+      }
+    });
+  }
+
+  function handleProducao() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setToProducao(demandId, projectUrl);
+        setGoingToProducao(false);
+        setProjectUrl("");
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erro ao mover para produção.");
       }
     });
   }
@@ -49,7 +67,17 @@ export function StatusActions({
                 type="button"
                 variant="destructive"
                 disabled={pending}
-                onClick={() => setRejecting((v) => !v)}
+                onClick={() => { setRejecting((v) => !v); setGoingToProducao(false); }}
+              >
+                {STATUS_LABELS[status]}
+              </Button>
+            ) : status === "EM_PRODUCAO" ? (
+              <Button
+                key={status}
+                type="button"
+                disabled={pending}
+                onClick={() => { setGoingToProducao((v) => !v); setRejecting(false); }}
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
               >
                 {STATUS_LABELS[status]}
               </Button>
@@ -66,6 +94,30 @@ export function StatusActions({
             )
           )}
         </div>
+
+        {goingToProducao && (
+          <div className="mt-3 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/10 dark:border-emerald-800 p-3">
+            <p className="text-xs font-medium text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
+              <Link2 size={13} />
+              Informe o link de acesso ao projeto
+            </p>
+            <Input
+              type="url"
+              value={projectUrl}
+              onChange={(e) => setProjectUrl(e.target.value)}
+              placeholder="https://..."
+              className="text-sm"
+            />
+            <Button
+              type="button"
+              disabled={pending || !projectUrl.trim()}
+              onClick={handleProducao}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              {pending ? "Confirmando..." : "Confirmar e colocar em produção"}
+            </Button>
+          </div>
+        )}
 
         {rejecting && (
           <div className="mt-3 space-y-2">

@@ -128,68 +128,36 @@ body {
 }
 
 .dark {
-
-  --background: oklch(0.145 0 0);
-
-  --foreground: oklch(0.985 0 0);
-
-  --card: oklch(0.205 0 0);
-
-  --card-foreground: oklch(0.985 0 0);
-
-  --popover: oklch(0.205 0 0);
-
-  --popover-foreground: oklch(0.985 0 0);
-
-  --primary: oklch(0.922 0 0);
-
-  --primary-foreground: oklch(0.205 0 0);
-
-  --secondary: oklch(0.269 0 0);
-
-  --secondary-foreground: oklch(0.985 0 0);
-
-  --muted: oklch(0.269 0 0);
-
-  --muted-foreground: oklch(0.708 0 0);
-
-  --accent: oklch(0.269 0 0);
-
-  --accent-foreground: oklch(0.985 0 0);
-
+  --background: #0d1520;
+  --foreground: #e2eaf4;
+  --card: #152031;
+  --card-foreground: #e2eaf4;
+  --popover: #152031;
+  --popover-foreground: #e2eaf4;
+  --primary: #ffaf5e;
+  --primary-foreground: #0b1f3a;
+  --secondary: #1c2e45;
+  --secondary-foreground: #e2eaf4;
+  --muted: #1c2e45;
+  --muted-foreground: #84a3c9;
+  --accent: #1c2e45;
+  --accent-foreground: #ffaf5e;
   --destructive: oklch(0.704 0.191 22.216);
+  --border: #1e3250;
+  --input: #1e3250;
+  --ring: #4f7099;
 
-  --border: oklch(1 0 0 / 10%);
-
-  --input: oklch(1 0 0 / 15%);
-
-  --ring: oklch(0.556 0 0);
-
-  --chart-1: oklch(0.87 0 0);
-
-  --chart-2: oklch(0.556 0 0);
-
-  --chart-3: oklch(0.439 0 0);
-
-  --chart-4: oklch(0.371 0 0);
-
-  --chart-5: oklch(0.269 0 0);
-
-  --sidebar: oklch(0.205 0 0);
-
-  --sidebar-foreground: oklch(0.985 0 0);
-
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-
-  --sidebar-accent: oklch(0.269 0 0);
-
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-
-  --sidebar-border: oklch(1 0 0 / 10%);
-
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Flip the navy scale so text colors become light in dark mode */
+  --color-navy-50:  #152031;
+  --color-navy-100: #1e3250;
+  --color-navy-200: #2d4a73;
+  --color-navy-300: #4f7099;
+  --color-navy-400: #84a3c9;
+  --color-navy-500: #adc1db;
+  --color-navy-600: #c8d8ea;
+  --color-navy-700: #d6e0ed;
+  --color-navy-800: #e2eaf4;
+  --color-navy-900: #f0f4f9;
 }
 
 @layer base {
@@ -202,4 +170,44 @@ body {
   html {
     @apply font-sans;
   }
+}
+
+/* Tiptap editor prose styles */
+.tiptap-prose {
+  line-height: 1.6;
+  font-size: 0.875rem;
+  color: var(--foreground);
+}
+.tiptap-prose h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0.75rem 0 0.25rem;
+  color: var(--foreground);
+}
+.tiptap-prose h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0.5rem 0 0.25rem;
+  color: var(--foreground);
+}
+.tiptap-prose p {
+  margin: 0.25rem 0;
+}
+.tiptap-prose ul,
+.tiptap-prose ol {
+  padding-left: 1.5rem;
+  margin: 0.25rem 0;
+}
+.tiptap-prose ul { list-style-type: disc; }
+.tiptap-prose ol { list-style-type: decimal; }
+.tiptap-prose li { margin: 0.1rem 0; }
+.tiptap-prose strong { font-weight: 700; }
+.tiptap-prose em { font-style: italic; }
+.tiptap-prose u { text-decoration: underline; }
+.tiptap-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  height: 0;
 }
