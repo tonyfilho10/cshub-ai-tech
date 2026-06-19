@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isDevTeam, canChangeStatus } from "@/lib/permissions";
+import { isDevTeam, canChangeStatus, SHARED_DEPARTMENT_NAME } from "@/lib/permissions";
 import { DemandasList } from "./DemandasList";
 import { NovaSolicitacaoDialog } from "./NovaSolicitacaoDialog";
 
@@ -16,10 +16,13 @@ export default async function DemandasPage() {
     : {
         status: { not: "REJEITADO" as const },
         archived: false,
-        departmentId: user.departmentId,
+        OR: [
+          { departmentId: user.departmentId },
+          { department: { name: SHARED_DEPARTMENT_NAME } },
+        ],
       };
 
-  const [demands, departments] = await Promise.all([
+  const [demands, allDepartments, mentionableUsers] = await Promise.all([
     prisma.demand.findMany({
       where,
       include: {
@@ -41,10 +44,11 @@ export default async function DemandasPage() {
       },
       orderBy: { createdAt: "desc" },
     }),
-    isDevTeam(user.role) || isGestao
-      ? prisma.department.findMany({ orderBy: { name: "asc" } })
-      : Promise.resolve([]),
+    prisma.department.findMany({ orderBy: { name: "asc" } }),
+    prisma.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
+
+  const departments = isDevTeam(user.role) || isGestao ? allDepartments : [];
 
   return (
     <div>
@@ -57,7 +61,7 @@ export default async function DemandasPage() {
               : `Solicitações do setor ${user.department.name}`}
           </p>
         </div>
-        <NovaSolicitacaoDialog />
+        <NovaSolicitacaoDialog departments={allDepartments} defaultDepartmentId={user.departmentId} />
       </div>
 
       <DemandasList
@@ -70,6 +74,7 @@ export default async function DemandasPage() {
         canChangeStatus={canChangeStatus(user)}
         userId={user.id}
         canArchive={isDevTeam(user.role)}
+        mentionableUsers={mentionableUsers}
       />
     </div>
   );

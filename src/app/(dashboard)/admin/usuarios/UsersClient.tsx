@@ -47,10 +47,11 @@ export function UsersClient({
       </div>
 
       {/* Table header */}
-      <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 bg-navy-50 dark:bg-navy-900/30 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-navy-400">
+      <div className="grid grid-cols-[2fr_1fr_1fr_auto] gap-4 bg-navy-50 dark:bg-navy-900/30 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-navy-400">
         <span>Usuário</span>
         <span>Papel</span>
         <span>Setor</span>
+        <span>Ações</span>
       </div>
 
       {/* Rows */}

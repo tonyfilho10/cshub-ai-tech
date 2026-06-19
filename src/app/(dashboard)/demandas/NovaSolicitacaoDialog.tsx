@@ -9,6 +9,13 @@ import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { PRIORITY_OPTIONS } from "@/components/PriorityBadge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -16,10 +23,17 @@ import {
   DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import type { Department } from "@prisma/client";
 
 const initialState: DemandFormState = { error: null };
 
-export function NovaSolicitacaoDialog() {
+export function NovaSolicitacaoDialog({
+  departments,
+  defaultDepartmentId,
+}: {
+  departments: Department[];
+  defaultDepartmentId: string;
+}) {
   const [state, formAction, pending] = useActionState(createDemand, initialState);
   const [description, setDescription] = useState("");
 
@@ -65,6 +79,23 @@ export function NovaSolicitacaoDialog() {
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="departmentId">Categoria</Label>
+            <Select name="departmentId" defaultValue={defaultDepartmentId}>
+              <SelectTrigger id="departmentId" className="w-full">
+                <SelectValue placeholder="Selecione...">
+                  {(value: string) => departments.find((d) => d.id === value)?.name}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {departments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <Label>Descrição</Label>

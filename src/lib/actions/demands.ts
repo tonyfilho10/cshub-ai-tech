@@ -24,17 +24,27 @@ export async function createDemand(
   const description = String(formData.get("description") ?? "").trim();
   const priorityRaw = String(formData.get("priority") ?? "MEDIA") as Priority;
   const priority = VALID_PRIORITIES.includes(priorityRaw) ? priorityRaw : "MEDIA";
+  const departmentIdRaw = String(formData.get("departmentId") ?? "").trim();
 
   if (!title || !description) {
     return { error: "Preencha título e descrição." };
   }
 
-  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const recentDemand = await prisma.demand.findFirst({
-    where: { requesterId: user.id, createdAt: { gte: oneWeekAgo } },
+  let departmentId = user.departmentId;
+  if (departmentIdRaw && departmentIdRaw !== user.departmentId) {
+    const department = await prisma.department.findUnique({ where: { id: departmentIdRaw } });
+    if (!department) return { error: "Setor inválido." };
+    departmentId = department.id;
+  }
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const demandsThisMonth = await prisma.demand.count({
+    where: { requesterId: user.id, createdAt: { gte: startOfMonth } },
   });
-  if (recentDemand) {
-    return { error: "Você já registrou uma solicitação esta semana. Aguarde para enviar outra." };
+  if (demandsThisMonth >= 3) {
+    return { error: "Você já registrou 3 solicitações este mês. Aguarde o próximo mês para enviar outra." };
   }
 
   const demand = await prisma.demand.create({
@@ -43,7 +53,7 @@ export async function createDemand(
       description,
       priority,
       requesterId: user!.id,
-      departmentId: user!.departmentId,
+      departmentId,
     },
   });
 
@@ -84,6 +94,21 @@ export async function updateDemandStatus(
   revalidatePath(`/demandas/${demandId}`);
   revalidatePath("/demandas");
   revalidatePath("/demandas/arquivadas");
+}
+
+export async function updateDemandDepartment(demandId: string, departmentId: string) {
+  const user = await getCurrentUser();
+  if (!user || !isDevTeam(user.role)) throw new Error("Sem permissão para alterar a categoria desta demanda.");
+
+  const department = await prisma.department.findUnique({ where: { id: departmentId } });
+  if (!department) throw new Error("Setor inválido.");
+
+  await prisma.demand.update({ where: { id: demandId }, data: { departmentId } });
+
+  revalidatePath(`/demandas/${demandId}`);
+  revalidatePath("/demandas");
+  revalidatePath("/demandas/arquivadas");
+  revalidatePath("/dashboard");
 }
 
 export async function updatePriority(demandId: string, priority: Priority) {

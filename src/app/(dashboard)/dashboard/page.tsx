@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isDevTeam } from "@/lib/permissions";
+import { isDevTeam, SHARED_DEPARTMENT_NAME } from "@/lib/permissions";
 import { FileText, Hammer, Rocket, ArrowRight, ExternalLink } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -12,7 +12,14 @@ export default async function DashboardPage() {
   const isGestao = user.department.name === "Gestão";
   const canSeeAll = isDevTeam(user.role) || isGestao;
 
-  const baseWhere = canSeeAll ? {} : { departmentId: user.departmentId };
+  const baseWhere = canSeeAll
+    ? {}
+    : {
+        OR: [
+          { departmentId: user.departmentId },
+          { department: { name: SHARED_DEPARTMENT_NAME } },
+        ],
+      };
 
   const [rascunho, emDesenvolvimento, total, producaoProjects] = await Promise.all([
     prisma.demand.count({

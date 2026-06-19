@@ -71,7 +71,9 @@ export function CreateUserForm({ departments }: { departments: Department[] }) {
             <Label htmlFor="departmentId">Setor</Label>
             <Select name="departmentId">
               <SelectTrigger id="departmentId" className="w-full">
-                <SelectValue placeholder="Selecione o setor..." />
+                <SelectValue placeholder="Selecione o setor...">
+                  {(value: string) => departments.find((d) => d.id === value)?.name}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {departments.map((d) => (

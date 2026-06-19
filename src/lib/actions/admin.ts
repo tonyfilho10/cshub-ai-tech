@@ -64,6 +64,80 @@ export async function updateUserDepartment(userId: string, departmentId: string)
   revalidatePath("/admin/usuarios");
 }
 
+export async function updateUser(userId: string, name: string, email: string) {
+  await requireAdmin();
+
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
+  if (!trimmedName) throw new Error("Informe o nome do usuário.");
+  if (!trimmedEmail) throw new Error("Informe o e-mail do usuário.");
+
+  const existing = await prisma.user.findUnique({ where: { email: trimmedEmail } });
+  if (existing && existing.id !== userId) {
+    throw new Error("Já existe um usuário com esse e-mail.");
+  }
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target) throw new Error("Usuário não encontrado.");
+
+  if (trimmedEmail !== target.email) {
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    const { error } = await supabase.auth.admin.updateUserById(target.authId, {
+      email: trimmedEmail,
+      email_confirm: true,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { name: trimmedName, email: trimmedEmail },
+  });
+  revalidatePath("/admin/usuarios");
+}
+
+export async function deleteUser(userId: string) {
+  const currentUser = await requireAdmin();
+  if (currentUser.id === userId) {
+    throw new Error("Você não pode excluir o próprio usuário.");
+  }
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target) throw new Error("Usuário não encontrado.");
+
+  const [demands, comments, reactions, suggestions, updates, updateComments, updateReactions] =
+    await Promise.all([
+      prisma.demand.count({ where: { requesterId: userId } }),
+      prisma.comment.count({ where: { authorId: userId } }),
+      prisma.reaction.count({ where: { authorId: userId } }),
+      prisma.suggestion.count({ where: { authorId: userId } }),
+      prisma.demandUpdate.count({ where: { authorId: userId } }),
+      prisma.updateComment.count({ where: { authorId: userId } }),
+      prisma.updateReaction.count({ where: { authorId: userId } }),
+    ]);
+
+  if (demands + comments + reactions + suggestions + updates + updateComments + updateReactions > 0) {
+    throw new Error(
+      "Não é possível excluir este usuário pois há demandas, comentários ou reações vinculados a ele."
+    );
+  }
+
+  const supabase = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+  const { error } = await supabase.auth.admin.deleteUser(target.authId);
+  if (error) throw new Error(error.message);
+
+  await prisma.user.delete({ where: { id: userId } });
+  revalidatePath("/admin/usuarios");
+}
+
 export async function createUser(
   _prevState: SimpleFormState,
   formData: FormData

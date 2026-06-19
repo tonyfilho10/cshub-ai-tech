@@ -161,7 +161,7 @@ export function ProfileDialog({
                       type="text"
                       value={nameValue}
                       onChange={(e) => setNameValue(e.target.value)}
-                      className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+                      className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-transparent px-3 py-2 text-sm text-navy-900 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-accent-400"
                     />
                   </div>
                   <button type="button" disabled={pending || !nameValue.trim()} onClick={handleNameSubmit}
@@ -177,12 +177,12 @@ export function ProfileDialog({
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-navy-700 dark:text-foreground">Nova senha</label>
                     <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400" />
+                      className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-transparent px-3 py-2 text-sm text-navy-900 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-accent-400" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-navy-700 dark:text-foreground">Confirmar senha</label>
                     <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
-                      className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400" />
+                      className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-transparent px-3 py-2 text-sm text-navy-900 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-accent-400" />
                   </div>
                   <button type="button" disabled={pending || !password || !confirm} onClick={handlePasswordSubmit}
                     className="flex w-full items-center justify-center gap-2 rounded-lg bg-navy-800 px-4 py-2 text-sm font-medium text-white hover:bg-navy-700 disabled:opacity-40">

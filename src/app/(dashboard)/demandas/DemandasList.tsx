@@ -3,14 +3,23 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, Trash2, Pencil, X, Check, MessageSquare, Archive, Link2 } from "lucide-react";
-import { setDemandStatus, deleteDemand, editDemand, archiveDemand, setToProducao } from "@/lib/actions/demands";
-import { toggleReaction } from "@/lib/actions/profile";
+import { ChevronDown, ChevronUp, Trash2, Pencil, X, Check, MessageSquare, Archive, Link2, Search, Send } from "lucide-react";
+import { setDemandStatus, deleteDemand, editDemand, archiveDemand, setToProducao, updateDemandDepartment } from "@/lib/actions/demands";
+import { toggleReaction, createComment } from "@/lib/actions/profile";
 import { STATUS_LABELS, STATUS_BADGE_CLASSES } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PriorityBadge, PRIORITY_OPTIONS } from "@/components/PriorityBadge";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { UserAvatar } from "@/components/UserAvatar";
+import { MentionTextarea, renderWithMentions, type MentionUser } from "@/components/MentionTextarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { DemandStatus, Priority } from "@prisma/client";
 
@@ -63,21 +72,25 @@ export function DemandasList({
   canChangeStatus,
   userId,
   canArchive,
+  mentionableUsers,
 }: {
   demands: Demand[];
   departments: Department[];
   canChangeStatus: boolean;
   userId: string;
   canArchive: boolean;
+  mentionableUsers: MentionUser[];
 }) {
   const [statusFilter, setStatusFilter] = useState<DemandStatus | "TODOS">("TODOS");
   const [deptFilter, setDeptFilter] = useState<string | "TODOS">("TODOS");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "TODAS">("TODAS");
+  const [search, setSearch] = useState("");
 
   const visible = demands.filter((d) => {
     if (statusFilter !== "TODOS" && d.status !== statusFilter) return false;
     if (deptFilter !== "TODOS" && d.department.id !== deptFilter) return false;
     if (priorityFilter !== "TODAS" && d.priority !== priorityFilter) return false;
+    if (search.trim() && !d.title.toLowerCase().includes(search.trim().toLowerCase())) return false;
     return true;
   });
 
@@ -86,6 +99,18 @@ export function DemandasList({
 
   return (
     <div className="space-y-4">
+      {/* Busca */}
+      <div className="relative max-w-sm">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400" />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar solicitações..."
+          className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+        />
+      </div>
+
       {/* Filtro de status */}
       <div className="flex flex-wrap gap-2">
         <FilterChip active={statusFilter === "TODOS"} onClick={() => setStatusFilter("TODOS")}>
@@ -130,15 +155,17 @@ export function DemandasList({
       {visible.length === 0 && (
         <p className="text-sm text-muted-foreground">Nenhuma solicitação.</p>
       )}
-      <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {visible.map((demand) => (
           <DemandCard
             key={demand.id}
             demand={demand}
+            departments={departments}
             canChangeStatus={canChangeStatus}
             isOwner={demand.requesterId === userId}
             canArchive={canArchive}
             currentUserId={userId}
+            mentionableUsers={mentionableUsers}
           />
         ))}
       </div>
@@ -146,7 +173,7 @@ export function DemandasList({
   );
 }
 
-function RecentCommentItem({ comment }: { comment: RecentComment }) {
+function RecentCommentItem({ comment, mentionableUsers }: { comment: RecentComment; mentionableUsers: MentionUser[] }) {
   const [showReplies, setShowReplies] = useState(false);
   return (
     <div>
@@ -154,7 +181,7 @@ function RecentCommentItem({ comment }: { comment: RecentComment }) {
         <UserAvatar name={comment.author.name} avatarUrl={comment.author.avatarUrl} size="sm" className="shrink-0 mt-0.5" />
         <div className="min-w-0">
           <span className="text-xs font-medium text-navy-700 dark:text-navy-300">{comment.author.name} </span>
-          <span className="text-xs text-navy-600 dark:text-navy-400">{comment.content}</span>
+          <span className="text-xs text-navy-600 dark:text-navy-400">{renderWithMentions(comment.content, mentionableUsers)}</span>
           {comment.replies.length > 0 && (
             <button
               type="button"
@@ -173,7 +200,7 @@ function RecentCommentItem({ comment }: { comment: RecentComment }) {
               <UserAvatar name={r.author.name} avatarUrl={r.author.avatarUrl} size="sm" className="shrink-0 mt-0.5" />
               <div>
                 <span className="text-xs font-medium text-navy-700 dark:text-navy-300">{r.author.name} </span>
-                <span className="text-xs text-navy-600 dark:text-navy-400">{r.content}</span>
+                <span className="text-xs text-navy-600 dark:text-navy-400">{renderWithMentions(r.content, mentionableUsers)}</span>
               </div>
             </div>
           ))}
@@ -210,18 +237,26 @@ function FilterChip({
 
 const EMOJIS = ["👍", "❤️", "🚀", "🤔", "✅"];
 
+function stripHtml(html: string) {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function DemandCard({
   demand,
+  departments,
   canChangeStatus,
   isOwner,
   canArchive,
   currentUserId,
+  mentionableUsers,
 }: {
   demand: Demand;
+  departments: Department[];
   canChangeStatus: boolean;
   isOwner: boolean;
   canArchive: boolean;
   currentUserId: string;
+  mentionableUsers: MentionUser[];
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -236,6 +271,7 @@ function DemandCard({
   const [editTitle, setEditTitle] = useState(demand.title);
   const [editDescription, setEditDescription] = useState(demand.description);
   const [editPriority, setEditPriority] = useState<Priority>(demand.priority);
+  const [commentContent, setCommentContent] = useState("");
   const router = useRouter();
 
   const lockedStatuses: DemandStatus[] = ["EM_DESENVOLVIMENTO", "EM_TESTE", "EM_PRODUCAO"];
@@ -245,12 +281,26 @@ function DemandCard({
     emoji,
     count: demand.reactions.filter((r) => r.emoji === emoji).length,
     reacted: demand.reactions.some((r) => r.emoji === emoji && r.author.id === currentUserId),
-  })).filter((g) => g.count > 0);
+  }));
 
   function handleReaction(emoji: string) {
     startTransition(async () => {
       await toggleReaction(demand.id, emoji);
       router.refresh();
+    });
+  }
+
+  function handleComment() {
+    setError(null);
+    if (!commentContent.trim()) return;
+    startTransition(async () => {
+      try {
+        await createComment(demand.id, commentContent);
+        setCommentContent("");
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erro ao comentar.");
+      }
     });
   }
 
@@ -267,51 +317,66 @@ function DemandCard({
     });
   }
 
+  function changeDepartment(departmentId: string) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updateDemandDepartment(demand.id, departmentId);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erro ao atualizar categoria.");
+      }
+    });
+  }
+
   return (
-    <div className="rounded-xl border border-navy-100 dark:border-navy-800 bg-white dark:bg-card shadow-sm">
+    <>
+    <div className="rounded-xl border border-navy-100 dark:border-navy-800 bg-white dark:bg-card shadow-sm h-fit">
       {/* Header do card */}
-      <div className="flex items-center gap-2 px-5 py-4">
+      <div className="flex items-center gap-2 px-4 py-3">
         <button
           type="button"
           onClick={() => { setOpen((v) => !v); setEditing(false); }}
-          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <PriorityBadge priority={demand.priority} />
               <StatusBadge status={demand.status} />
               <span className="text-xs text-muted-foreground">
                 {demand.department.name} · por {demand.requester.name}
               </span>
             </div>
-            <p className="mt-1 font-medium text-navy-900 line-clamp-1">{demand.title}</p>
-          </div>
-          {reactionGroups.length > 0 && (
-            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-              {reactionGroups.map(({ emoji, count, reacted }) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  disabled={pending}
-                  onClick={() => handleReaction(emoji)}
-                  className={cn(
-                    "flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs transition",
-                    reacted
-                      ? "border-accent-400 bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-400"
-                      : "border-navy-200 dark:border-navy-700 bg-white dark:bg-card hover:border-accent-300"
-                  )}
-                >
-                  {emoji} <span className="text-navy-600 dark:text-navy-400">{count}</span>
-                </button>
-              ))}
+            <p className="mt-1 text-sm font-medium text-navy-900 dark:text-foreground line-clamp-1">{demand.title}</p>
+            {demand.description && (
+              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                {stripHtml(demand.description)}
+              </p>
+            )}
+            <div className="mt-1.5 flex items-center gap-2">
+              <span
+                className={cn(
+                  "flex items-center gap-1 rounded-full px-2 py-0.5 text-xs",
+                  demand.reactions.length > 0
+                    ? "bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-400"
+                    : "bg-navy-50 dark:bg-navy-800/50 text-navy-400"
+                )}
+              >
+                😀 {demand.reactions.length}
+              </span>
+              <span
+                className={cn(
+                  "flex items-center gap-1 rounded-full px-2 py-0.5 text-xs",
+                  demand.commentCount > 0
+                    ? "bg-navy-100 dark:bg-navy-700 text-navy-600 dark:text-navy-300"
+                    : "bg-navy-50 dark:bg-navy-800/50 text-navy-400"
+                )}
+              >
+                <MessageSquare size={11} />
+                {demand.commentCount}
+              </span>
             </div>
-          )}
-          {demand.commentCount > 0 && (
-            <span className="flex items-center gap-1 rounded-full bg-navy-100 dark:bg-navy-700 px-2 py-0.5 text-xs text-navy-500 dark:text-navy-300 shrink-0">
-              <MessageSquare size={11} />
-              {demand.commentCount}
-            </span>
-          )}
+          </div>
           {open ? (
             <ChevronUp size={16} className="shrink-0 text-navy-400" />
           ) : (
@@ -351,10 +416,20 @@ function DemandCard({
           </button>
         )}
       </div>
+    </div>
 
-      {/* Conteúdo expandido */}
-      {open && (
-        <div className="border-t border-navy-100 dark:border-navy-800 px-5 py-4 space-y-4">
+    {/* Modal de detalhes */}
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditing(false); }}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <div className="space-y-4">
+          <div className="flex items-center gap-1.5 flex-wrap pr-6">
+            <PriorityBadge priority={demand.priority} />
+            <StatusBadge status={demand.status} />
+            <span className="text-xs text-muted-foreground">
+              {demand.department.name} · por {demand.requester.name}
+            </span>
+          </div>
+          <h2 className="text-base font-semibold text-navy-900 dark:text-foreground pr-6">{demand.title}</h2>
           {editing ? (
             <div className="space-y-3">
               <input
@@ -418,17 +493,72 @@ function DemandCard({
             />
           )}
 
-          {/* Comments preview */}
-          {!editing && demand.recentComments.length > 0 && (
-            <div className="space-y-2 rounded-lg border border-navy-100 dark:border-navy-800 bg-navy-50 dark:bg-navy-900/30 p-3">
-              <p className="text-xs font-semibold text-navy-400 uppercase tracking-wide flex items-center gap-1">
-                <MessageSquare size={11} />
-                Comentários recentes
-              </p>
-              {demand.recentComments.map((c) => (
-                <RecentCommentItem key={c.id} comment={c} />
-              ))}
-            </div>
+          {!editing && (
+            <>
+              {/* Reações */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-medium text-muted-foreground">Reagir:</span>
+                {reactionGroups.map(({ emoji, count, reacted }) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => handleReaction(emoji)}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-sm transition-all",
+                      reacted
+                        ? "border-accent-400 bg-accent-400/10 dark:bg-accent-400/15 scale-105"
+                        : "border-navy-100 dark:border-navy-700 hover:border-accent-300 hover:bg-navy-50 dark:hover:bg-navy-800/60"
+                    )}
+                  >
+                    <span>{emoji}</span>
+                    {count > 0 && (
+                      <span className={cn("text-xs font-medium", reacted ? "text-accent-600 dark:text-accent-300" : "text-navy-500 dark:text-navy-400")}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Comentários recentes */}
+              <div className="space-y-2 rounded-lg border border-navy-100 dark:border-navy-800 bg-navy-50 dark:bg-navy-900/30 p-3">
+                <p className="text-xs font-semibold text-navy-400 uppercase tracking-wide flex items-center gap-1">
+                  <MessageSquare size={11} />
+                  Comentários {demand.commentCount > 0 && `(${demand.commentCount})`}
+                </p>
+                {demand.recentComments.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum comentário ainda. Seja o primeiro!</p>
+                ) : (
+                  demand.recentComments.map((c) => (
+                    <RecentCommentItem key={c.id} comment={c} mentionableUsers={mentionableUsers} />
+                  ))
+                )}
+              </div>
+
+              {/* Composer de comentário */}
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <MentionTextarea
+                    value={commentContent}
+                    onChange={setCommentContent}
+                    mentionableUsers={mentionableUsers}
+                    rows={2}
+                    placeholder="Escreva um comentário... (@ para mencionar)"
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleComment(); } }}
+                    className="w-full rounded-xl border border-navy-200 dark:border-navy-700 bg-navy-50/50 dark:bg-navy-800/30 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400/60 focus:border-accent-400 resize-none transition"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={pending || !commentContent.trim()}
+                  onClick={handleComment}
+                  className="shrink-0 rounded-xl bg-navy-800 dark:bg-navy-700 p-2.5 text-white hover:bg-navy-700 dark:hover:bg-navy-600 disabled:opacity-40 transition"
+                >
+                  <Send size={15} />
+                </button>
+              </div>
+            </>
           )}
 
           <div className="flex items-center justify-between">
@@ -483,6 +613,32 @@ function DemandCard({
                   Cancelar
                 </button>
               </div>
+            </div>
+          )}
+
+          {canChangeStatus && departments.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-navy-500 uppercase tracking-wide">
+                Categoria
+              </p>
+              <Select
+                value={demand.department.id}
+                disabled={pending}
+                onValueChange={(value) => { if (value) changeDepartment(value); }}
+              >
+                <SelectTrigger size="sm" className="w-full sm:w-56">
+                  <SelectValue>
+                    {departments.find((d) => d.id === demand.department.id)?.name ?? demand.department.name}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
@@ -604,7 +760,8 @@ function DemandCard({
             </div>
           )}
         </div>
-      )}
-    </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

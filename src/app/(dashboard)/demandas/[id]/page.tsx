@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { canChangeStatus, canViewDemand, canViewProjectSpec, isDevTeam } from "@/lib/permissions";
+import { canChangeStatus, canViewDemand, canViewProjectSpec, isDevTeam, SHARED_DEPARTMENT_NAME } from "@/lib/permissions";
 import { NEXT_STATUSES } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PriorityBadge } from "@/components/PriorityBadge";
@@ -64,7 +64,8 @@ export default async function DemandaDetailPage({
   if (!demand) notFound();
   if (!canViewDemand(user, demand)) notFound();
 
-  const mentionableUsers = isDevTeam(user.role)
+  const isSharedDemand = demand.department.name === SHARED_DEPARTMENT_NAME;
+  const mentionableUsers = isDevTeam(user.role) || isSharedDemand
     ? await prisma.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } })
     : await prisma.user.findMany({
         where: {

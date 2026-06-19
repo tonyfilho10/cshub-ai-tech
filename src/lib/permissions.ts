@@ -9,14 +9,21 @@ export function isAdmin(role: UserRole) {
   return role === "ADMIN";
 }
 
-/** Usuário comum só vê demandas próprias ou do mesmo departamento. */
+/** Nome do setor especial cujas demandas ficam visíveis e abertas a todos. */
+export const SHARED_DEPARTMENT_NAME = "TODOS";
+
+/** Usuário comum só vê demandas próprias, do mesmo departamento ou do setor TODOS. */
 export function canViewDemand(
   user: CurrentUser,
-  demand: Pick<Demand, "requesterId" | "departmentId" | "status">
+  demand: Pick<Demand, "requesterId" | "departmentId" | "status"> & {
+    department: { name: string };
+  }
 ) {
   if (isDevTeam(user.role)) return true;
   return (
-    demand.requesterId === user.id || demand.departmentId === user.departmentId
+    demand.requesterId === user.id ||
+    demand.departmentId === user.departmentId ||
+    demand.department.name === SHARED_DEPARTMENT_NAME
   );
 }
 
