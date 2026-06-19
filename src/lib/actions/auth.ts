@@ -1,7 +1,16 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+
+async function getSiteUrl() {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const protocol = h.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
+  return host ? `${protocol}://${host}` : "http://localhost:3000";
+}
 
 export type AuthFormState = { error: string | null };
 
@@ -30,8 +39,9 @@ export async function resetPassword(email: string): Promise<{ error: string | nu
   if (!email?.trim()) return { error: "Informe seu e-mail.", success: false };
 
   const supabase = await createClient();
+  const siteUrl = await getSiteUrl();
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/reset-password`,
+    redirectTo: `${siteUrl}/reset-password`,
   });
 
   if (error) return { error: "Não foi possível enviar o e-mail. Verifique o endereço.", success: false };
