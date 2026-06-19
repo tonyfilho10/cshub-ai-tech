@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canChangeStatus, isDevTeam } from "@/lib/permissions";
@@ -11,7 +12,40 @@ import { createMentionNotifications } from "@/lib/actions/notifications";
 
 const VALID_PRIORITIES: Priority[] = ["BAIXA", "MEDIA", "ALTA", "URGENTE"];
 
+const DEADLINE_DAYS: Record<Priority, number> = {
+  URGENTE: 3,
+  ALTA: 6,
+  MEDIA: 14,
+  BAIXA: 30,
+};
+
+function computeDeadline(priority: Priority): Date {
+  const deadline = new Date();
+  deadline.setDate(deadline.getDate() + DEADLINE_DAYS[priority]);
+  return deadline;
+}
+
 export type DemandFormState = { error: string | null };
+
+type AttachmentInput = { url: string; fileName: string; fileType: string; fileSize: number };
+
+function parseAttachments(raw: FormDataEntryValue | null): AttachmentInput[] {
+  if (!raw || typeof raw !== "string") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((a) => a && typeof a.url === "string" && typeof a.fileName === "string")
+      .map((a) => ({
+        url: a.url,
+        fileName: a.fileName,
+        fileType: typeof a.fileType === "string" ? a.fileType : "",
+        fileSize: typeof a.fileSize === "number" ? a.fileSize : 0,
+      }));
+  } catch {
+    return [];
+  }
+}
 
 export async function createDemand(
   _prevState: DemandFormState,
@@ -50,6 +84,8 @@ export async function createDemand(
     }
   }
 
+  const attachments = parseAttachments(formData.get("attachments"));
+
   const demand = await prisma.demand.create({
     data: {
       title,
@@ -57,6 +93,7 @@ export async function createDemand(
       priority,
       requesterId: user!.id,
       departmentId,
+      attachments: { create: attachments },
     },
   });
 
@@ -86,11 +123,14 @@ export async function updateDemandStatus(
     throw new Error("Informe o motivo da rejeição.");
   }
 
+  const enteringExecution = demand.status === "SOLICITADO" && newStatus !== "SOLICITADO";
+
   await prisma.demand.update({
     where: { id: demandId },
     data: {
       status: newStatus,
       rejectionReason: newStatus === "REJEITADO" ? rejectionReason!.trim() : demand.rejectionReason,
+      deadline: enteringExecution && !demand.deadline ? computeDeadline(demand.priority) : demand.deadline,
     },
   });
 
@@ -124,7 +164,14 @@ export async function updatePriority(demandId: string, priority: Priority) {
   if (!demand) throw new Error("Demanda não encontrada.");
   if (demand.requesterId !== user.id) throw new Error("Sem permissão.");
 
-  await prisma.demand.update({ where: { id: demandId }, data: { priority } });
+  if (priority !== demand.priority) {
+    await prisma.$transaction([
+      prisma.demand.update({ where: { id: demandId }, data: { priority } }),
+      prisma.priorityChangeLog.create({
+        data: { demandId, fromPriority: demand.priority, toPriority: priority, changedById: user.id },
+      }),
+    ]);
+  }
   revalidatePath(`/demandas/${demandId}`);
   revalidatePath("/demandas");
 }
@@ -140,10 +187,12 @@ export async function editDemand(
 
   const demand = await prisma.demand.findUnique({ where: { id: demandId } });
   if (!demand) throw new Error("Demanda não encontrada.");
-  if (demand.requesterId !== user.id) throw new Error("Sem permissão.");
+
+  const isOwner = demand.requesterId === user.id;
+  if (!isOwner && !isDevTeam(user.role)) throw new Error("Sem permissão.");
 
   const locked: string[] = ["EM_DESENVOLVIMENTO", "EM_TESTE", "EM_PRODUCAO"];
-  if (locked.includes(demand.status)) {
+  if (isOwner && !isDevTeam(user.role) && locked.includes(demand.status)) {
     throw new Error("Não é possível editar uma solicitação que já está em desenvolvimento ou produção.");
   }
 
@@ -151,14 +200,25 @@ export async function editDemand(
     throw new Error("Preencha título e descrição.");
   }
 
-  await prisma.demand.update({
-    where: { id: demandId },
-    data: {
-      title: title.trim(),
-      description: description.trim(),
-      ...(priority && VALID_PRIORITIES.includes(priority) ? { priority } : {}),
-    },
-  });
+  const priorityChanged = priority && VALID_PRIORITIES.includes(priority) && priority !== demand.priority;
+
+  await prisma.$transaction([
+    prisma.demand.update({
+      where: { id: demandId },
+      data: {
+        title: title.trim(),
+        description: description.trim(),
+        ...(priorityChanged ? { priority } : {}),
+      },
+    }),
+    ...(priorityChanged
+      ? [
+          prisma.priorityChangeLog.create({
+            data: { demandId, fromPriority: demand.priority, toPriority: priority!, changedById: user.id },
+          }),
+        ]
+      : []),
+  ]);
 
   revalidatePath(`/demandas/${demandId}`);
   revalidatePath("/demandas");
@@ -199,11 +259,14 @@ export async function setDemandStatus(
     throw new Error("Informe o motivo da rejeição.");
   }
 
+  const enteringExecution = demand.status === "SOLICITADO" && newStatus !== "SOLICITADO";
+
   await prisma.demand.update({
     where: { id: demandId },
     data: {
       status: newStatus,
       rejectionReason: newStatus === "REJEITADO" ? rejectionReason!.trim() : demand.rejectionReason,
+      deadline: enteringExecution && !demand.deadline ? computeDeadline(demand.priority) : demand.deadline,
     },
   });
 
@@ -393,27 +456,14 @@ export async function approveSuggestion(suggestionId: string) {
 
   const suggestion = await prisma.suggestion.findUnique({
     where: { id: suggestionId },
-    include: { demand: { select: { departmentId: true, id: true } }, author: { select: { id: true } } },
+    include: { demand: { select: { id: true } } },
   });
   if (!suggestion) throw new Error("Sugestão não encontrada.");
   if (suggestion.status !== "PENDENTE") throw new Error("Sugestão já foi avaliada.");
 
-  const title = suggestion.content.slice(0, 80).split("\n")[0].trim() || "Nova demanda";
-
-  await prisma.$transaction([
-    prisma.suggestion.update({ where: { id: suggestionId }, data: { status: "APROVADO" } }),
-    prisma.demand.create({
-      data: {
-        title,
-        description: suggestion.content,
-        requesterId: suggestion.author.id,
-        departmentId: suggestion.demand.departmentId,
-      },
-    }),
-  ]);
+  await prisma.suggestion.update({ where: { id: suggestionId }, data: { status: "APROVADO" } });
 
   revalidatePath(`/demandas/${suggestion.demand.id}`);
-  revalidatePath("/demandas");
 }
 
 export async function rejectSuggestion(suggestionId: string, reason: string) {
@@ -458,4 +508,40 @@ export async function upsertProjectSpec(
   });
 
   revalidatePath(`/demandas/${demandId}`);
+}
+
+export async function deleteAttachment(attachmentId: string) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const attachment = await prisma.attachment.findUnique({
+    where: { id: attachmentId },
+    include: {
+      demand: { select: { id: true, requesterId: true } },
+      comment: { select: { id: true, authorId: true, demandId: true } },
+    },
+  });
+  if (!attachment) throw new Error("Anexo não encontrado.");
+
+  const isOwner = attachment.demand
+    ? attachment.demand.requesterId === user.id
+    : attachment.comment!.authorId === user.id;
+  if (!isOwner && !isDevTeam(user.role)) throw new Error("Sem permissão.");
+
+  const demandId = attachment.demand?.id ?? attachment.comment!.demandId;
+
+  await prisma.attachment.delete({ where: { id: attachmentId } });
+
+  const path = attachment.url.split("/attachments/")[1];
+  if (path) {
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    await supabase.storage.from("attachments").remove([path]);
+  }
+
+  revalidatePath(`/demandas/${demandId}`);
+  revalidatePath("/demandas");
 }
