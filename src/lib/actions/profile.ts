@@ -30,14 +30,29 @@ export async function updatePassword(newPassword: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function createComment(demandId: string, content: string, parentId?: string) {
+type CommentAttachmentInput = { url: string; fileName: string; fileType: string; fileSize: number };
+
+export async function createComment(
+  demandId: string,
+  content: string,
+  parentId?: string,
+  attachments: CommentAttachmentInput[] = []
+) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  if (!content.trim()) throw new Error("Escreva um comentário.");
+  if (!content.trim() && attachments.length === 0) {
+    throw new Error("Escreva um comentário ou anexe um arquivo.");
+  }
 
   await prisma.comment.create({
-    data: { content: content.trim(), demandId, authorId: user.id, parentId: parentId ?? null },
+    data: {
+      content: content.trim(),
+      demandId,
+      authorId: user.id,
+      parentId: parentId ?? null,
+      attachments: { create: attachments },
+    },
   });
 
   const demand = await prisma.demand.findUnique({ where: { id: demandId }, select: { title: true } });
