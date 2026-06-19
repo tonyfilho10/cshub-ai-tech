@@ -94,8 +94,8 @@ export default async function DashboardPage() {
           <h2 className="mb-3 text-sm font-semibold text-navy-700">Projetos em produção</h2>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {producaoProjects.map((demand) => (
-              <Link key={demand.id} href={`/demandas/${demand.id}`}>
-                <div className="group rounded-xl border border-emerald-100 dark:border-emerald-900/40 bg-white dark:bg-card p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md">
+              <div key={demand.id} className="group rounded-xl border border-emerald-100 dark:border-emerald-900/40 bg-white dark:bg-card p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md">
+                <Link href={`/demandas/${demand.id}`} className="block">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
                       <Rocket size={15} />
@@ -113,20 +113,19 @@ export default async function DashboardPage() {
                       ))}
                     </div>
                   )}
-                  {demand.project?.projectUrl && (
-                    <a
-                      href={demand.project.projectUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-2 flex items-center gap-1 text-xs text-emerald-600 hover:underline"
-                    >
-                      <ExternalLink size={11} />
-                      Acessar projeto
-                    </a>
-                  )}
-                </div>
-              </Link>
+                </Link>
+                {demand.project?.projectUrl && (
+                  <a
+                    href={demand.project.projectUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 flex items-center gap-1 text-xs text-emerald-600 hover:underline"
+                  >
+                    <ExternalLink size={11} />
+                    Acessar projeto
+                  </a>
+                )}
+              </div>
             ))}
           </div>
         </div>
