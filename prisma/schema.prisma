@@ -62,6 +62,7 @@ model User {
   updateComments  UpdateComment[]
   updateReactions UpdateReaction[]
   notifications   Notification[]
+  priorityChanges PriorityChangeLog[]
   createdAt       DateTime        @default(now())
 }
 
@@ -89,6 +90,7 @@ model Demand {
   description     String
   status          DemandStatus   @default(SOLICITADO)
   priority        Priority       @default(MEDIA)
+  deadline        DateTime?
   rejectionReason String?
   archived        Boolean        @default(false)
   requesterId     String
@@ -100,21 +102,48 @@ model Demand {
   comments        Comment[]
   reactions       Reaction[]
   updates         DemandUpdate[]
+  attachments     Attachment[]
+  priorityLogs    PriorityChangeLog[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 }
 
+model PriorityChangeLog {
+  id           String   @id @default(cuid())
+  demandId     String
+  demand       Demand   @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  fromPriority Priority
+  toPriority   Priority
+  changedById  String
+  changedBy    User     @relation(fields: [changedById], references: [id])
+  createdAt    DateTime @default(now())
+}
+
 model Comment {
-  id        String    @id @default(cuid())
-  content   String    @db.Text
-  demandId  String
-  demand    Demand    @relation(fields: [demandId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User      @relation(fields: [authorId], references: [id])
-  parentId  String?
-  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   Comment[] @relation("CommentReplies")
-  createdAt DateTime  @default(now())
+  id          String       @id @default(cuid())
+  content     String       @db.Text
+  demandId    String
+  demand      Demand       @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User         @relation(fields: [authorId], references: [id])
+  parentId    String?
+  parent      Comment?     @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     Comment[]    @relation("CommentReplies")
+  attachments Attachment[]
+  createdAt   DateTime     @default(now())
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  url       String
+  fileName  String
+  fileType  String
+  fileSize  Int
+  demandId  String?
+  demand    Demand?  @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
 
 model Reaction {

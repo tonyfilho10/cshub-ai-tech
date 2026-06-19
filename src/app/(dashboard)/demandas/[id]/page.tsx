@@ -6,6 +6,8 @@ import { NEXT_STATUSES } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { ProjectUrlBanner } from "@/components/ProjectUrlBanner";
+import { AttachmentGallery } from "@/components/AttachmentUploader";
+import { cn } from "@/lib/utils";
 import { PrioritySelector } from "./PrioritySelector";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusActions } from "./StatusActions";
@@ -14,6 +16,7 @@ import { ClientDemandActions } from "./ClientDemandActions";
 import { SuggestionsSection } from "./SuggestionsSection";
 import { CommentsSection } from "./CommentsSection";
 import { DemandUpdatesSection } from "./DemandUpdatesSection";
+import { PageOutline } from "./PageOutline";
 
 export default async function DemandaDetailPage({
   params,
@@ -34,12 +37,21 @@ export default async function DemandaDetailPage({
         include: { author: { select: { name: true } } },
         orderBy: { createdAt: "desc" },
       },
+      attachments: true,
+      priorityLogs: {
+        include: { changedBy: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+      },
       comments: {
         where: { parentId: null },
         include: {
           author: { select: { id: true, name: true, avatarUrl: true } },
+          attachments: true,
           replies: {
-            include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+            include: {
+              author: { select: { id: true, name: true, avatarUrl: true } },
+              attachments: true,
+            },
             orderBy: { createdAt: "asc" },
           },
         },
@@ -81,12 +93,29 @@ export default async function DemandaDetailPage({
 
   const isRequester = demand.requesterId === user.id;
   const lockedStatuses = ["EM_DESENVOLVIMENTO", "EM_TESTE", "EM_PRODUCAO"];
-  const canEdit = !lockedStatuses.includes(demand.status);
+  const canEdit = isDevTeam(user.role) || (isRequester && !lockedStatuses.includes(demand.status));
   const canPost = isDevTeam(user.role);
+
+  const showProjectSpec =
+    canViewProjectSpec(user) &&
+    (demand.status === "APROVADO" ||
+      demand.status === "EM_DESENVOLVIMENTO" ||
+      demand.status === "EM_TESTE" ||
+      demand.status === "EM_PRODUCAO");
+  const showSuggestions = demand.status !== "REJEITADO";
+
+  const outlineSections = [
+    { id: "detalhes", label: "Detalhes da solicitação" },
+    ...(showProjectSpec ? [{ id: "especificacao", label: "Especificação técnica" }] : []),
+    { id: "atualizacoes", label: "Atualizações do time de TI" },
+    { id: "comentarios", label: "Comentários" },
+    ...(showSuggestions ? [{ id: "sugestoes", label: "Sugestões" }] : []),
+  ];
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <Card className="p-6">
+      <PageOutline sections={outlineSections} />
+      <Card id="detalhes" className="p-6">
         <CardContent className="px-0">
           <div className="mb-3 flex items-start justify-between gap-4">
             <h1 className="text-xl font-semibold text-navy-900">{demand.title}</h1>
@@ -103,6 +132,12 @@ export default async function DemandaDetailPage({
             className="tiptap-prose"
             dangerouslySetInnerHTML={{ __html: demand.description }}
           />
+
+          {demand.attachments.length > 0 && (
+            <div className="mt-3">
+              <AttachmentGallery attachments={demand.attachments} canDelete={isRequester || isDevTeam(user.role)} />
+            </div>
+          )}
 
           <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-navy-100 pt-4 text-sm">
             <div>
@@ -125,7 +160,32 @@ export default async function DemandaDetailPage({
                 {demand.updatedAt.toLocaleDateString("pt-BR")}
               </dd>
             </div>
+            {demand.deadline && (
+              <div>
+                <dt className="text-muted-foreground">Prazo de conclusão</dt>
+                <dd className={cn("font-medium", new Date(demand.deadline) < new Date() ? "text-red-600" : "text-navy-900")}>
+                  {demand.deadline.toLocaleDateString("pt-BR")}
+                </dd>
+              </div>
+            )}
           </dl>
+
+          {demand.priorityLogs.length > 0 && (
+            <details className="mt-3 text-sm">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-navy-700">
+                Histórico de prioridade ({demand.priorityLogs.length})
+              </summary>
+              <ul className="mt-2 space-y-1.5 border-l-2 border-navy-100 pl-3">
+                {demand.priorityLogs.map((log) => (
+                  <li key={log.id} className="text-xs text-muted-foreground">
+                    <span className="font-medium text-navy-700">{log.changedBy.name}</span>{" "}
+                    mudou de <PriorityBadge priority={log.fromPriority} /> para <PriorityBadge priority={log.toPriority} />{" "}
+                    em {log.createdAt.toLocaleDateString("pt-BR")}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
 
           {demand.status === "REJEITADO" && demand.rejectionReason && (
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -156,20 +216,18 @@ export default async function DemandaDetailPage({
         <StatusActions demandId={demand.id} nextStatuses={NEXT_STATUSES[demand.status]} />
       )}
 
-      {canViewProjectSpec(user) &&
-        (demand.status === "APROVADO" ||
-          demand.status === "EM_DESENVOLVIMENTO" ||
-          demand.status === "EM_TESTE" ||
-          demand.status === "EM_PRODUCAO") && (
+      {showProjectSpec && (
+        <div id="especificacao">
           <ProjectSpecForm
             demandId={demand.id}
             initialSpec={demand.project?.technicalSpec ?? ""}
             initialTechnologies={demand.project?.technologies ?? ""}
           />
-        )}
+        </div>
+      )}
 
       {/* TI Updates */}
-      <Card className="p-5">
+      <Card id="atualizacoes" className="p-5">
         <CardContent className="px-0">
           <DemandUpdatesSection
             demandId={demand.id}
@@ -181,6 +239,7 @@ export default async function DemandaDetailPage({
         </CardContent>
       </Card>
 
+      <div id="comentarios">
       <CommentsSection
         demandId={demand.id}
         demandStatus={demand.status}
@@ -193,13 +252,16 @@ export default async function DemandaDetailPage({
           .filter((s) => s.sourceCommentId !== null)
           .map((s) => ({ commentId: s.sourceCommentId!, status: s.status }))}
       />
+      </div>
 
-      {demand.status !== "REJEITADO" && (
-        <SuggestionsSection
-          demandId={demand.id}
-          suggestions={demand.suggestions}
-          canApprove={isDevTeam(user.role)}
-        />
+      {showSuggestions && (
+        <div id="sugestoes">
+          <SuggestionsSection
+            demandId={demand.id}
+            suggestions={demand.suggestions}
+            canApprove={isDevTeam(user.role)}
+          />
+        </div>
       )}
     </div>
   );

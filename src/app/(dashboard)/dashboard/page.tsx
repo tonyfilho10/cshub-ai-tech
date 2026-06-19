@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isDevTeam, SHARED_DEPARTMENT_NAME } from "@/lib/permissions";
 import { FileText, Hammer, FlaskConical, Rocket, ArrowRight, ExternalLink } from "lucide-react";
+import { DashboardSearchBar } from "@/components/DashboardSearchBar";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -56,17 +57,20 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold text-navy-900">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          {canSeeAll ? "Visão geral de todas as solicitações" : `Visão geral do setor ${user.department.name}`}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-navy-900">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            {canSeeAll ? "Visão geral de todas as solicitações" : `Visão geral do setor ${user.department.name}`}
+          </p>
+        </div>
+        <DashboardSearchBar />
       </div>
 
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Em rascunho"
+          label="Solicitado"
           description="Solicitado · Em análise · Aprovado"
           value={rascunho}
           total={total}

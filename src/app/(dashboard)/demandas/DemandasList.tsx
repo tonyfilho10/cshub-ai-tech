@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Trash2, Pencil, X, Check, MessageSquare, Archive, Link2, Search, Send, Lightbulb, Undo2 } from "lucide-react";
 import { setDemandStatus, deleteDemand, editDemand, archiveDemand, setToProducao, setToTeste, updateDemandDepartment, promoteCommentToSuggestion, demoteToComment } from "@/lib/actions/demands";
-import { toggleReaction, createComment, editComment, deleteComment } from "@/lib/actions/profile";
+import { toggleReaction, createComment, deleteComment } from "@/lib/actions/profile";
 import { STATUS_LABELS, STATUS_BADGE_CLASSES } from "@/lib/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PriorityBadge, PRIORITY_OPTIONS } from "@/components/PriorityBadge";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { UserAvatar } from "@/components/UserAvatar";
 import { MentionTextarea, renderWithMentions, type MentionUser } from "@/components/MentionTextarea";
+import { useAttachmentUpload, AttachmentPicker, AttachmentChips, AttachmentGallery, type UploadedAttachment } from "@/components/AttachmentUploader";
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ type RecentReply = {
   content: string;
   authorId: string;
   author: { name: string; avatarUrl: string | null };
+  attachments: UploadedAttachment[];
 };
 
 type RecentComment = {
@@ -38,6 +40,7 @@ type RecentComment = {
   authorId: string;
   author: { name: string; avatarUrl: string | null };
   replies: RecentReply[];
+  attachments: UploadedAttachment[];
 };
 
 type DemandReaction = { emoji: string; author: { id: string } };
@@ -59,6 +62,7 @@ type Demand = {
   recentComments: RecentComment[];
   reactions: DemandReaction[];
   promotedCommentIds: PromotedEntry[];
+  attachments: UploadedAttachment[];
 };
 
 type Department = { id: string; name: string };
@@ -81,6 +85,7 @@ export function DemandasList({
   canArchive,
   isDevTeam,
   mentionableUsers,
+  initialSearch = "",
 }: {
   demands: Demand[];
   departments: Department[];
@@ -89,11 +94,12 @@ export function DemandasList({
   canArchive: boolean;
   isDevTeam: boolean;
   mentionableUsers: MentionUser[];
+  initialSearch?: string;
 }) {
   const [statusFilter, setStatusFilter] = useState<DemandStatus | "TODOS">("TODOS");
   const [deptFilter, setDeptFilter] = useState<string | "TODOS">("TODOS");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "TODAS">("TODAS");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
 
   const visible = demands.filter((d) => {
     if (statusFilter !== "TODOS" && d.status !== statusFilter) return false;
@@ -215,6 +221,7 @@ function RecentCommentItem({
         authorId={comment.authorId}
         authorName={comment.author.name}
         authorAvatarUrl={comment.author.avatarUrl}
+        attachments={comment.attachments}
         demandId={demandId}
         currentUserId={currentUserId}
         isDevTeam={isDevTeam}
@@ -241,6 +248,7 @@ function RecentCommentItem({
               authorId={r.authorId}
               authorName={r.author.name}
               authorAvatarUrl={r.author.avatarUrl}
+              attachments={r.attachments}
               demandId={demandId}
               currentUserId={currentUserId}
               mentionableUsers={mentionableUsers}
@@ -258,6 +266,7 @@ function CommentRow({
   authorId,
   authorName,
   authorAvatarUrl,
+  attachments,
   demandId,
   currentUserId,
   isDevTeam = false,
@@ -270,6 +279,7 @@ function CommentRow({
   authorId: string;
   authorName: string;
   authorAvatarUrl: string | null;
+  attachments: UploadedAttachment[];
   demandId: string;
   currentUserId: string;
   isDevTeam?: boolean;
@@ -277,23 +287,12 @@ function CommentRow({
   promotedEntry?: PromotedEntry;
   mentionableUsers: MentionUser[];
 }) {
-  const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState(content);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const isOwn = authorId === currentUserId;
   const canPromote = canSuggest && (isOwn || isDevTeam);
   const isPromoted = !!promotedEntry;
   const canDemote = isPromoted && promotedEntry!.status === "PENDENTE" && (isOwn || isDevTeam);
-
-  function handleEdit() {
-    if (!editContent.trim()) return;
-    startTransition(async () => {
-      await editComment(id, editContent, demandId);
-      setEditing(false);
-      router.refresh();
-    });
-  }
 
   function handleDelete() {
     startTransition(async () => {
@@ -325,39 +324,13 @@ function CommentRow({
       <UserAvatar name={authorName} avatarUrl={authorAvatarUrl} size="sm" className="shrink-0 mt-0.5" />
       <div className="min-w-0 flex-1">
         <span className="text-xs font-medium text-navy-700 dark:text-navy-300">{authorName} </span>
-        {editing ? (
-          <div className="mt-1 space-y-1.5">
-            <MentionTextarea
-              value={editContent}
-              onChange={setEditContent}
-              mentionableUsers={mentionableUsers}
-              rows={2}
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEdit(); } }}
-              className="w-full rounded-lg border border-navy-200 dark:border-navy-700 bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent-400 resize-none"
-            />
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                disabled={pending || !editContent.trim()}
-                onClick={handleEdit}
-                className="flex items-center gap-1 rounded-lg bg-navy-800 dark:bg-navy-700 px-2 py-1 text-xs text-white hover:bg-navy-700 disabled:opacity-40"
-              >
-                <Check size={11} /> Salvar
-              </button>
-              <button
-                type="button"
-                onClick={() => { setEditing(false); setEditContent(content); }}
-                className="flex items-center gap-1 rounded-lg border border-navy-200 dark:border-navy-700 px-2 py-1 text-xs text-navy-600 dark:text-navy-300 hover:bg-navy-50 dark:hover:bg-navy-800"
-              >
-                <X size={11} /> Cancelar
-              </button>
-            </div>
+        <span className="text-xs text-navy-600 dark:text-navy-400">{renderWithMentions(content, mentionableUsers)}</span>
+        {attachments.length > 0 && (
+          <div className="mt-1">
+            <AttachmentGallery attachments={attachments} canDelete={isOwn || isDevTeam} />
           </div>
-        ) : (
-          <span className="text-xs text-navy-600 dark:text-navy-400">{renderWithMentions(content, mentionableUsers)}</span>
         )}
-        {!editing && (canPromote || isPromoted) && (
+        {(canPromote || isPromoted) && (
           <div className="mt-1 flex items-center gap-2">
             {canPromote && !isPromoted && (
               <button
@@ -387,16 +360,8 @@ function CommentRow({
           </div>
         )}
       </div>
-      {isOwn && !editing && (
+      {isOwn && (
         <div className="flex items-center gap-0.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="rounded p-1 text-navy-400 hover:bg-navy-100 hover:text-navy-700 dark:hover:bg-navy-800 transition"
-            aria-label="Editar comentário"
-          >
-            <Pencil size={12} />
-          </button>
           <button
             type="button"
             disabled={pending}
@@ -415,8 +380,17 @@ function CommentRow({
 
 const EMOJIS = ["👍", "❤️", "🚀", "🤔", "✅"];
 
+const DESCRIPTION_PREVIEW_LENGTH = 90;
+
 function stripHtml(html: string) {
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function previewDescription(html: string) {
+  const text = stripHtml(html);
+  return text.length > DESCRIPTION_PREVIEW_LENGTH
+    ? `${text.slice(0, DESCRIPTION_PREVIEW_LENGTH).trimEnd()}...`
+    : text;
 }
 
 function DemandCard({
@@ -453,6 +427,7 @@ function DemandCard({
   const [editDescription, setEditDescription] = useState(demand.description);
   const [editPriority, setEditPriority] = useState<Priority>(demand.priority);
   const [commentContent, setCommentContent] = useState("");
+  const { attachments: commentAttachments, uploading: commentUploading, error: commentUploadError, addFiles: addCommentFiles, removeAttachment: removeCommentAttachment, reset: resetCommentAttachments } = useAttachmentUpload();
   const router = useRouter();
 
   const lockedStatuses: DemandStatus[] = ["EM_DESENVOLVIMENTO", "EM_TESTE", "EM_PRODUCAO"];
@@ -475,11 +450,12 @@ function DemandCard({
 
   function handleComment() {
     setError(null);
-    if (!commentContent.trim()) return;
+    if (!commentContent.trim() && commentAttachments.length === 0) return;
     startTransition(async () => {
       try {
-        await createComment(demand.id, commentContent);
+        await createComment(demand.id, commentContent, undefined, commentAttachments);
         setCommentContent("");
+        resetCommentAttachments();
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Erro ao comentar.");
@@ -532,8 +508,8 @@ function DemandCard({
             </div>
             <p className="mt-1 text-sm font-medium text-navy-900 dark:text-foreground line-clamp-1">{demand.title}</p>
             {demand.description && (
-              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                {stripHtml(demand.description)}
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {previewDescription(demand.description)}
               </p>
             )}
             <div className="mt-1.5 flex items-center gap-2">
@@ -713,6 +689,10 @@ function DemandCard({
                 ))}
               </div>
 
+              {demand.attachments.length > 0 && (
+                <AttachmentGallery attachments={demand.attachments} canDelete={isOwner || isDevTeam} />
+              )}
+
               {/* Comentários recentes */}
               <div className="space-y-2 rounded-lg border border-navy-100 dark:border-navy-800 bg-navy-50 dark:bg-navy-900/30 p-3">
                 <p className="text-xs font-semibold text-navy-400 uppercase tracking-wide flex items-center gap-1">
@@ -749,15 +729,20 @@ function DemandCard({
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleComment(); } }}
                     className="w-full rounded-xl border border-navy-200 dark:border-navy-700 bg-navy-50/50 dark:bg-navy-800/30 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400/60 focus:border-accent-400 resize-none transition"
                   />
+                  <AttachmentChips attachments={commentAttachments} onRemove={removeCommentAttachment} uploading={commentUploading} />
+                  {commentUploadError && <p className="mt-1 text-xs text-red-500">{commentUploadError}</p>}
                 </div>
-                <button
-                  type="button"
-                  disabled={pending || !commentContent.trim()}
-                  onClick={handleComment}
-                  className="shrink-0 rounded-xl bg-navy-800 dark:bg-navy-700 p-2.5 text-white hover:bg-navy-700 dark:hover:bg-navy-600 disabled:opacity-40 transition"
-                >
-                  <Send size={15} />
-                </button>
+                <div className="flex shrink-0 gap-1.5">
+                  <AttachmentPicker onSelect={addCommentFiles} disabled={commentUploading || pending} compact />
+                  <button
+                    type="button"
+                    disabled={pending || commentUploading || (!commentContent.trim() && commentAttachments.length === 0)}
+                    onClick={handleComment}
+                    className="rounded-xl bg-navy-800 dark:bg-navy-700 p-2.5 text-white hover:bg-navy-700 dark:hover:bg-navy-600 disabled:opacity-40 transition"
+                  >
+                    <Send size={15} />
+                  </button>
+                </div>
               </div>
             </>
           )}

@@ -53,7 +53,7 @@ export function SuggestionsSection({
       <div>
         <h3 className="text-sm font-semibold text-navy-700 dark:text-navy-300">Sugestões</h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Sugestões aprovadas geram uma nova solicitação de desenvolvimento.
+          Sugestões aprovadas permanecem nesta solicitação até serem finalizadas.
         </p>
       </div>
 
