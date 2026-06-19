@@ -44,7 +44,12 @@ export async function resetPassword(email: string): Promise<{ error: string | nu
     redirectTo: `${siteUrl}/reset-password`,
   });
 
-  if (error) return { error: "Não foi possível enviar o e-mail. Verifique o endereço.", success: false };
+  if (error) {
+    if (error.status === 429) {
+      return { error: "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.", success: false };
+    }
+    return { error: "Não foi possível enviar o e-mail. Verifique o endereço.", success: false };
+  }
   return { error: null, success: true };
 }
 
