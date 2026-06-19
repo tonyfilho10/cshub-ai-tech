@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { PRIORITY_OPTIONS } from "@/components/PriorityBadge";
+import { useAttachmentUpload, AttachmentPicker, AttachmentChips } from "@/components/AttachmentUploader";
 import {
   Select,
   SelectContent,
@@ -36,6 +37,7 @@ export function NovaSolicitacaoDialog({
 }) {
   const [state, formAction, pending] = useActionState(createDemand, initialState);
   const [description, setDescription] = useState("");
+  const { attachments, uploading, error: uploadError, addFiles, removeAttachment } = useAttachmentUpload();
 
   return (
     <Dialog>
@@ -47,7 +49,7 @@ export function NovaSolicitacaoDialog({
           </Button>
         }
       />
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nova solicitação</DialogTitle>
           <DialogDescription>
@@ -106,9 +108,18 @@ export function NovaSolicitacaoDialog({
             <input type="hidden" name="description" value={description} />
           </div>
 
-          {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+          <div className="space-y-1.5">
+            <Label>Anexos</Label>
+            <AttachmentPicker onSelect={addFiles} disabled={uploading} />
+            <AttachmentChips attachments={attachments} onRemove={removeAttachment} uploading={uploading} />
+            <input type="hidden" name="attachments" value={JSON.stringify(attachments)} />
+          </div>
 
-          <Button type="submit" disabled={pending} className="w-full" size="lg">
+          {(state.error || uploadError) && (
+            <p className="text-sm text-destructive">{state.error || uploadError}</p>
+          )}
+
+          <Button type="submit" disabled={pending || uploading} className="w-full" size="lg">
             {pending ? "Enviando..." : "Enviar solicitação"}
           </Button>
         </form>
