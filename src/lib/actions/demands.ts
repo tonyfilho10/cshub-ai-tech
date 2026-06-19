@@ -37,14 +37,17 @@ export async function createDemand(
     departmentId = department.id;
   }
 
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-  const demandsThisMonth = await prisma.demand.count({
-    where: { requesterId: user.id, createdAt: { gte: startOfMonth } },
-  });
-  if (demandsThisMonth >= 3) {
-    return { error: "Você já registrou 3 solicitações este mês. Aguarde o próximo mês para enviar outra." };
+  const isUnlimited = ["TI", "Gestão"].includes(user.department.name);
+  if (!isUnlimited) {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const demandsThisMonth = await prisma.demand.count({
+      where: { requesterId: user.id, createdAt: { gte: startOfMonth } },
+    });
+    if (demandsThisMonth >= 3) {
+      return { error: "Você já registrou 3 solicitações este mês. Aguarde o próximo mês para enviar outra." };
+    }
   }
 
   const demand = await prisma.demand.create({
